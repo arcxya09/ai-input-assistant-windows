@@ -14,12 +14,15 @@ static class Program
         if(args.Length>0&&args[0]=="--target")
         {
             Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
-            LoadKeyboardLayout("00000409",1);
+            LoadKeyboardLayout(args.Length>1&&args[1]=="cjk"?"00000804":"00000409",1);
             var form=new Form{Text="AI Input synthetic integration target",Width=500,Height=200,TopMost=true};
-            var edit=new TextBox{Text="前文后文",Multiline=true,Dock=DockStyle.Fill};
-            if(args.Length>1&&args[1]=="password"){edit.Multiline=false;edit.UseSystemPasswordChar=true;}
+            string kind=args.Length>1?args[1]:"text";
+            TextBoxBase edit=kind=="rich"?new RichTextBox():new TextBox{Multiline=true};
+            edit.Text=kind=="empty"?"":kind=="long"?new string('前',70000)+"后文":"前文后文";edit.Dock=DockStyle.Fill;
+            if(kind=="password"&&edit is TextBox password){password.Multiline=false;password.UseSystemPasswordChar=true;}
+            if(kind=="readonly")edit.ReadOnly=true;
             form.Controls.Add(edit);
-            form.Shown+=(_,_)=>{edit.Focus();edit.SelectionStart=2;edit.SelectionLength=0;};
+            form.Shown+=(_,_)=>{edit.Focus();edit.SelectionStart=kind=="empty"?0:kind=="long"?70000:2;edit.SelectionLength=kind=="selection"?2:0;};
             Application.Run(form);return 0;
         }
         try{return Run(args[0]).GetAwaiter().GetResult();}
@@ -49,7 +52,7 @@ static class Program
                 Console.WriteLine("PASS native Edit caret and before/after context");
                 var insert=await broker.CallAsync(new("insert",context.Token,"新增"),default);
                 if(!insert.Ok)throw new Exception("Insert "+insert.Code);
-                Console.WriteLine("PASS Unicode insertion verified through independent UIA reread");
+                Console.WriteLine("PASS Unicode insertion verified through independent context reread");
                 var again=await broker.CallAsync(new("insert",context.Token,"新增"),default);
                 if(again.Ok)throw new Exception("Duplicate token accepted");
                 Console.WriteLine("PASS duplicate insertion token rejected");
@@ -69,6 +72,34 @@ static class Program
             }
             finally{password.Kill(true);}
         }
+        foreach(string kind in new[]{"readonly","selection"})
+        {
+            using var target=await Target(kind);
+            try
+            {
+                var result=await broker.CallAsync(new("capture"),default);
+                if(result.Ok||result.Snapshot!=null)throw new Exception(kind+" target accepted");
+                Console.WriteLine("PASS "+kind+" target rejected");
+            }
+            finally{target.Kill(true);}
+        }
+        foreach(string kind in new[]{"empty","long","rich","cjk"})
+        {
+            using var target=await Target(kind);
+            try
+            {
+                var result=await broker.CallAsync(new("capture"),default);
+                if(!result.Ok||result.Snapshot==null)throw new Exception(kind+" context "+result.Code);
+                string before=kind=="empty"?"":kind=="long"?new string('前',300):"前文";
+                string after=kind=="empty"?"":"后文";
+                if(result.Snapshot.Before!=before||result.Snapshot.After!=after)throw new Exception(kind+" wrong context");
+                var insertion=await broker.CallAsync(new("insert",result.Snapshot.Token,"新增"),default);
+                if(!insertion.Ok)throw new Exception(kind+" insertion "+insertion.Code);
+                Console.WriteLine("PASS "+kind+" input context and verified insertion");
+            }
+            finally{target.Kill(true);}
+        }
+        await BrowserTests.Run(broker);
         return 0;
     }
 }

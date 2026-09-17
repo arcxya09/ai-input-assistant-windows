@@ -9,6 +9,7 @@
 <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
 <StartupObject>AiInput.App.Program</StartupObject><AssemblyName>AiInputAssistant</AssemblyName>
 <ApplicationManifest>app.manifest</ApplicationManifest>
+<ApplicationIcon>Assets/App.ico</ApplicationIcon>
 <RuntimeIdentifier>win-x64</RuntimeIdentifier><PlatformTarget>x64</PlatformTarget><SelfContained>true</SelfContained>
 <PublishSingleFile>false</PublishSingleFile><PublishTrimmed>false</PublishTrimmed>
 </PropertyGroup>
@@ -20,6 +21,7 @@
 <FrameworkReference Include="Microsoft.WindowsDesktop.App"/>
 </ItemGroup>
 <ItemGroup><Using Remove="System.Windows.Forms"/><Using Remove="System.Drawing"/></ItemGroup>
+<ItemGroup><Content Include="Assets/App.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"/></ItemGroup>
 <Target Name="PublishAppPri" AfterTargets="ComputeFilesToPublish">
 <Error Condition="'$(ProjectPriFullPath)' == '' Or !Exists('$(ProjectPriFullPath)')" Text="Generated application PRI is missing."/>
 <ItemGroup><ResolvedFileToPublish Include="$(ProjectPriFullPath)" RelativePath="$(AssemblyName).pri" CopyToPublishDirectory="PreserveNewest"/></ItemGroup>

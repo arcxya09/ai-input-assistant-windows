@@ -1,7 +1,10 @@
+#ifndef AppVersion
+  #define AppVersion "1.1.0"
+#endif
 [Setup]
 AppId={{89D271AA-5ED4-44F1-A53F-8E42E65BA680}
 AppName=AI Input Assistant
-AppVersion=1.0.0
+AppVersion={#AppVersion}
 AppPublisher=arcxya09
 DefaultDirName={localappdata}\Programs\AiInputAssistant
 DefaultGroupName=AI Input Assistant
@@ -10,7 +13,8 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
 OutputDir=..\artifacts
-OutputBaseFilename=AiInputAssistant-1.0.0-Setup-x64
+OutputBaseFilename=AiInputAssistant-{#AppVersion}-Setup-x64
+SetupIconFile=..\src\AiInput.App\Assets\App.ico
 Compression=lzma2
 SolidCompression=yes
 CloseApplications=yes

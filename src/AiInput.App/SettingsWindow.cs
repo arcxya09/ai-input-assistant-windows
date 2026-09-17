@@ -1,4 +1,5 @@
 using AiInput.Windows;
+using AiInput.Core;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -11,9 +12,23 @@ public sealed class SettingsWindow : Window
     readonly TextBlock status=new(){TextWrapping=TextWrapping.Wrap};
     readonly TextBlock feedback=new(){TextWrapping=TextWrapping.Wrap};
     readonly PasswordBox key=new(){PlaceholderText="填写 DeepSeek 官方 API Key",MaxWidth=600,HorizontalAlignment=HorizontalAlignment.Stretch};
+    readonly TextBlock updateStatus=new(){TextWrapping=TextWrapping.Wrap};
+    readonly ProgressBar updateProgress=new(){Minimum=0,Maximum=100};
+    readonly Button checkUpdate=new(){Content="检查更新"};
+    readonly Button installUpdate=new(){Content="下载并安装"};
+    readonly Button cancelUpdate=new(){Content="取消下载"};
     public SettingsWindow(Controller controller)
     {
-        this.controller=controller;Title="AI 输入助手 · 1.0";
+        this.controller=controller;Title="AI 输入助手 · "+ProductInfo.VersionText;
+        AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory,"Assets","App.ico"));
+        AppWindow.Closing+=(_,args)=>
+        {
+            if(!controller.IsQuitting)
+            {
+                args.Cancel=true;
+                if(AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)presenter.Minimize();
+            }
+        };
         AppWindow.Resize(new global::Windows.Graphics.SizeInt32(700,780));
         var panel=new StackPanel{Spacing=18,Margin=new Thickness(32),MaxWidth=640,HorizontalAlignment=HorizontalAlignment.Stretch};
         panel.Children.Add(new TextBlock{Text="AI 输入助手",FontSize=30,FontWeight=Microsoft.UI.Text.FontWeights.SemiBold});
@@ -62,10 +77,33 @@ public sealed class SettingsWindow : Window
                 catch(Exception e){LocalStore.Log("ExportFailed",e);feedback.Text="导出失败";}
             }
         };panel.Children.Add(export);panel.Children.Add(feedback);
+        panel.Children.Add(new TextBlock{Text="软件更新 · 当前版本 "+ProductInfo.VersionText,FontSize=18});
+        var automatic=new ToggleSwitch{Header="自动检查并下载新版本",IsOn=controller.Settings.AutoUpdate};
+        automatic.Toggled+=(_,_)=>controller.Updates.SetAutomatic(automatic.IsOn);
+        panel.Children.Add(automatic);panel.Children.Add(updateStatus);panel.Children.Add(updateProgress);
+        var updateButtons=new StackPanel{Orientation=Orientation.Horizontal,Spacing=12};
+        checkUpdate.Click+=async(_,_)=>await controller.Updates.CheckAsync();
+        installUpdate.Click+=async(_,_)=>await controller.Updates.InstallAsync();
+        cancelUpdate.Click+=(_,_)=>controller.Updates.Cancel();
+        updateButtons.Children.Add(checkUpdate);updateButtons.Children.Add(installUpdate);updateButtons.Children.Add(cancelUpdate);panel.Children.Add(updateButtons);
+        panel.Children.Add(new HyperlinkButton{Content="在 GitHub 查看版本与下载",NavigateUri=new Uri(ProductInfo.ReleasesUrl)});
+        panel.Children.Add(new TextBlock{Text="下载完成后点击“重启并安装”，程序会保存设置、退出并完成安装，然后重新启动。"+(controller.Updates.Portable?" 当前为便携版；更新后会在当前目录生成卸载程序。":""),TextWrapping=TextWrapping.Wrap});
+        panel.Children.Add(new TextBlock{Text="关闭此窗口会最小化到任务栏。双击状态胶囊可打开设置；完全退出请使用托盘或胶囊右键菜单。",TextWrapping=TextWrapping.Wrap});
         Content=new ScrollViewer{Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
-        controller.Changed+=Update;Closed+=(_,_)=>controller.Changed-=Update;Update();
+        controller.Changed+=Update;controller.Updates.Changed+=UpdateDownload;
+        Closed+=(_,_)=>{controller.Changed-=Update;controller.Updates.Changed-=UpdateDownload;};Update();UpdateDownload();
     }
     void Update()=>status.Text=controller.Status+(controller.HotkeyError.Length>0?"\n快捷键问题："+controller.HotkeyError:"");
+    void UpdateDownload()
+    {
+        var u=controller.Updates;
+        updateStatus.Text=u.Message;updateProgress.Value=u.Progress;
+        updateProgress.Visibility=u.Downloading?Visibility.Visible:Visibility.Collapsed;
+        checkUpdate.IsEnabled=!u.Busy;installUpdate.IsEnabled=!u.Busy&&u.Available!=null;
+        installUpdate.Content=u.Ready?"重启并安装":"下载并安装";
+        cancelUpdate.Visibility=u.Busy?Visibility.Visible:Visibility.Collapsed;
+        cancelUpdate.Content=u.Downloading?"取消下载":"取消";
+    }
     static ComboBox KeyBox(string label,uint selected)
     {
         var box=new ComboBox{Header=label,HorizontalAlignment=HorizontalAlignment.Stretch};

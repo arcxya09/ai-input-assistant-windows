@@ -9,6 +9,18 @@ public static class Native
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(nint hwnd, out uint process);
     [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int key);
     [DllImport("user32.dll")] public static extern nint GetKeyboardLayout(uint thread);
+    [DllImport("user32.dll")] public static extern bool GetGUIThreadInfo(uint thread, ref GUITHREADINFO info);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)] public static extern int GetClassName(nint hwnd,System.Text.StringBuilder name,int capacity);
+    [DllImport("user32.dll",EntryPoint="GetWindowLongPtrW")] public static extern nint GetWindowLongPtr(nint hwnd,int index);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode,EntryPoint="SendMessageTimeoutW",SetLastError=true)] public static extern nint SendMessageTimeout(nint hwnd,uint message,nint wParam,nint lParam,uint flags,uint timeout,out nuint result);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode,EntryPoint="SendMessageTimeoutW",SetLastError=true)] public static extern nint SendTextMessageTimeout(nint hwnd,uint message,nint wParam,System.Text.StringBuilder text,uint flags,uint timeout,out nuint result);
+    [DllImport("user32.dll",CharSet=CharSet.Unicode,EntryPoint="SendMessageTimeoutW",SetLastError=true)] public static extern nint SendSelectionMessageTimeout(nint hwnd,uint message,ref int start,ref int end,uint flags,uint timeout,out nuint result);
+    [DllImport("imm32.dll")] public static extern nint ImmGetContext(nint hwnd);
+    [DllImport("imm32.dll")] public static extern bool ImmReleaseContext(nint hwnd,nint context);
+    [DllImport("imm32.dll",EntryPoint="ImmGetCompositionStringW")] public static extern int ImmGetCompositionString(nint context,uint index,nint buffer,uint length);
+    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left,Top,Right,Bottom; }
+    [StructLayout(LayoutKind.Sequential)] public struct GUITHREADINFO
+    { public uint Size,Flags; public nint Active,Focus,Capture,MenuOwner,MoveSize,Caret; public RECT CaretRect; }
     [DllImport("user32.dll")] public static extern bool RegisterHotKey(nint hwnd, int id, uint modifiers, uint key);
     [DllImport("user32.dll")] public static extern bool UnregisterHotKey(nint hwnd, int id);
     [DllImport("user32.dll")] public static extern nint SetWindowsHookEx(int id, HookProc proc, nint module, uint thread);

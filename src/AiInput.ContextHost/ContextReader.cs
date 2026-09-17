@@ -16,6 +16,7 @@ public sealed class ContextReader : IDisposable
     ContextSnapshot? snapshot;
     long processStart;
     long eventVersion;
+    NativeEditState? nativeState;
     public ContextReader(int parent){this.parent=parent;}
     public RpcReply Handle(RpcRequest request)
     {
@@ -45,50 +46,91 @@ public sealed class ContextReader : IDisposable
         uint thread=Native.GetWindowThreadProcessId(hwnd,out uint pid);
         if(hwnd==0||pid==parent||pid==Environment.ProcessId)throw new InvalidOperationException("NoTarget");
         var element=automation.GetFocusedElement();
-        if(element==null||element.CurrentProcessId!=(int)pid||element.CurrentHasKeyboardFocus==0||element.CurrentIsEnabled==0)
+        if(element==null||element.CurrentHasKeyboardFocus==0||element.CurrentIsEnabled==0)
             throw new InvalidOperationException("NoFocus");
+        // Browser accessibility providers may live in a renderer process.
+        // Confirm tree ownership instead of requiring the same process id.
+        var root=automation.ElementFromHandle(hwnd);
+        var ancestor=element;bool belongs=false;
+        for(int i=0;i<40&&ancestor!=null;i++)
+        {
+            if(automation.CompareElements(root,ancestor)!=0){belongs=true;break;}
+            ancestor=automation.RawViewWalker.GetParentElement(ancestor);
+        }
+        if(!belongs)throw new InvalidOperationException("NoFocus");
         object password=element.GetCurrentPropertyValueEx(30019,1);
         if(password is not bool isPassword||isPassword)throw new InvalidOperationException("ProtectedOrUnknown");
-        var pattern=element.GetCurrentPattern(10014) as IUIAutomationTextPattern;
+        var pattern=Pattern(element,10014) as IUIAutomationTextPattern;
+        for(int i=0;i<4&&pattern==null;i++)
+        {
+            var candidate=automation.RawViewWalker.GetParentElement(element);
+            if(candidate==null||automation.CompareElements(root,element)!=0)break;
+            if(candidate.GetCurrentPropertyValueEx(30019,1) is bool p&&p)throw new InvalidOperationException("ProtectedOrUnknown");
+            element=candidate;pattern=Pattern(element,10014) as IUIAutomationTextPattern;
+        }
         if(pattern==null)throw new InvalidOperationException("TextPatternUnavailable");
         var selection=pattern.GetSelection();
-        if(selection.Length!=1)throw new InvalidOperationException("SelectionUnsupported");
-        var selected=selection.GetElement(0);
-        if(selected.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,selected,TextPatternRangeEndpoint.TextPatternRangeEndpoint_End)!=0)
+        if(selection.Length>1)throw new InvalidOperationException("SelectionUnsupported");
+        var selected=selection.Length==1?selection.GetElement(0):null;
+        if(selected!=null&&selected.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,selected,TextPatternRangeEndpoint.TextPatternRangeEndpoint_End)!=0)
             throw new InvalidOperationException("SelectionNotEmpty");
         IUIAutomationTextRange caret;
-        if(element.GetCurrentPattern(10024) is IUIAutomationTextPattern2 p2)
+        if(Pattern(element,10024) is IUIAutomationTextPattern2 p2)
         {
             caret=p2.GetCaretRange(out int active);
             if(active==0)throw new InvalidOperationException("InactiveCaret");
         }
-        else caret=selected;
-        if(caret.GetAttributeValue(40015) is not bool readOnly||readOnly)
+        else caret=selected??throw new InvalidOperationException("InactiveCaret");
+        object editable=caret.GetAttributeValue(40015);
+        if(editable is bool readOnly)
+        {
+            if(readOnly)throw new InvalidOperationException("ReadOnlyOrUnknown");
+        }
+        else if(Pattern(element,10002) is not IUIAutomationValuePattern value||value.CurrentIsReadOnly!=0)
             throw new InvalidOperationException("ReadOnlyOrUnknown");
-        if(element.GetCurrentPattern(10032) is IUIAutomationTextEditPattern edit)
+        if(Pattern(element,10032) is IUIAutomationTextEditPattern edit)
         {
-            if(edit.GetActiveComposition()!=null)throw new InvalidOperationException("Composing");
+            var composition=edit.GetActiveComposition();
+            if(composition!=null&&composition.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,composition,TextPatternRangeEndpoint.TextPatternRangeEndpoint_End)!=0)
+                throw new InvalidOperationException("Composing");
         }
-        else
-        {
-            // No reliable cross-process IMM/TSF fallback: CJK IME targets without
-            // composition support are explicitly unavailable rather than guessed.
-            int lang=(int)((long)Native.GetKeyboardLayout(thread)&0x3FF);
-            if(lang is 0x04 or 0x11 or 0x12)throw new InvalidOperationException("CompositionUnsupported");
-        }
+        if(NativeEditReader.IsComposing(NativeEditReader.FocusWindow(thread)))throw new InvalidOperationException("Composing");
         return(element,caret,hwnd,(int)pid);
+    }
+    static object? Pattern(IUIAutomationElement element,int id)
+    {try{return element.GetCurrentPattern(id);}catch(COMException){return null;}}
+    (NativeEditState? State,nint Window,int Process) ReadNative()
+    {
+        if(!Native.InteractiveDesktop())throw new InvalidOperationException("DesktopUnavailable");
+        nint hwnd=Native.GetForegroundWindow();
+        uint thread=Native.GetWindowThreadProcessId(hwnd,out uint pid);
+        if(hwnd==0||pid==parent||pid==Environment.ProcessId)throw new InvalidOperationException("NoTarget");
+        return(NativeEditReader.Read(hwnd,thread,pid),hwnd,(int)pid);
     }
     ContextSnapshot Read(bool attach)
     {
         try
         {
+            var native=ReadNative();
+            if(native.State is {} state)
+            {
+                if(attach)
+                {
+                    nativeState=state;
+                    using var process=Process.GetProcessById(native.Process);
+                    processStart=process.StartTime.ToUniversalTime().Ticks;
+                }
+                return new(){Ok=true,Code="Ready",Token=Guid.NewGuid().ToString("N"),Window=(long)native.Window,
+                    Process=native.Process,Before=state.Before,After=state.After};
+            }
             var current=Locate();
-            long start=Process.GetProcessById(current.Process).StartTime.ToUniversalTime().Ticks;
+            using var owner=Process.GetProcessById(current.Process);
+            long start=owner.StartTime.ToUniversalTime().Ticks;
             if(attach)
             {
                 target=current.Element;anchor=current.Caret.Clone();
-                automation.AddAutomationEventHandler(20015,target,TreeScope.TreeScope_Element,null,handler);
-                automation.AddAutomationEventHandler(20014,target,TreeScope.TreeScope_Element,null,handler);
+                try{automation.AddAutomationEventHandler(20015,target,TreeScope.TreeScope_Element,null,handler);}catch(COMException){}
+                try{automation.AddAutomationEventHandler(20014,target,TreeScope.TreeScope_Element,null,handler);}catch(COMException){}
             }
             long version=Interlocked.Read(ref handler.Version);
             var before=current.Caret.Clone();
@@ -118,11 +160,21 @@ public sealed class ContextReader : IDisposable
     {
         try
         {
-            if(snapshot==null||snapshot.Token!=token||target==null||anchor==null||
+            if(snapshot==null||snapshot.Token!=token)return false;
+            if(nativeState!=null)
+            {
+                var native=ReadNative();
+                using var owner=Process.GetProcessById(snapshot.Process);
+                return native.Window==(nint)snapshot.Window&&native.Process==snapshot.Process&&
+                    owner.StartTime.ToUniversalTime().Ticks==processStart&&native.State==nativeState;
+            }
+            if(target==null||anchor==null||
                 eventVersion!=Interlocked.Read(ref handler.Version))return false;
             var current=Locate();
+            using var process=Process.GetProcessById(current.Process);
+            var fresh=Read(false);
             return current.Window==(nint)snapshot.Window&&current.Process==snapshot.Process&&
-                Process.GetProcessById(current.Process).StartTime.ToUniversalTime().Ticks==processStart&&
+                process.StartTime.ToUniversalTime().Ticks==processStart&&fresh.Ok&&fresh.Before==snapshot.Before&&fresh.After==snapshot.After&&
                 automation.CompareElements(target,current.Element)!=0&&
                 anchor.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,current.Caret,TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start)==0;
         }
@@ -151,7 +203,7 @@ public sealed class ContextReader : IDisposable
     public void Clear()
     {
         try{automation.RemoveAllEventHandlers();}catch{}
-        target=null;anchor=null;snapshot=null;processStart=0;
+        target=null;anchor=null;snapshot=null;nativeState=null;processStart=0;
     }
     public void Dispose(){Clear();}
     [ComVisible(true)]

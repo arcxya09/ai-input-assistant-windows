@@ -53,4 +53,5 @@ using(var content=new OneShotContent(original,image))
 }
 byte[] cancelled=[7,8,9];new OneShotContent(original,cancelled).Dispose();
 Check(cancelled.All(b=>b==0),"image cleared on cancellation before upload");
+count+=await UpdateTests.Run();
 Console.WriteLine("TOTAL "+count+" PASSED");

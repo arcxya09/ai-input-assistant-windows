@@ -7,6 +7,7 @@ namespace AiInput.Windows;
 public sealed class Settings
 {
     public int Schema { get; set; }=1;
+    public bool AutoUpdate { get; set; }=true;
     public double FontSize { get; set; }=16;
     public double Opacity { get; set; }=.85;
     public int X { get; set; }=120;
@@ -68,7 +69,7 @@ public static class LocalStore
             {
                 for(int i=4;i>=1;i--){string from=i==1?file:file+"."+(i-1);if(File.Exists(from))File.Move(from,file+"."+i,true);}
             }
-            File.AppendAllText(file,JsonSerializer.Serialize(new{time=DateTimeOffset.UtcNow,version="1.0.0",code,
+            File.AppendAllText(file,JsonSerializer.Serialize(new{time=DateTimeOffset.UtcNow,version=AiInput.Core.ProductInfo.VersionText,code,
                 errorType=error?.GetType().Name,hresult=error?.HResult})+Environment.NewLine);
         }catch{}
     }

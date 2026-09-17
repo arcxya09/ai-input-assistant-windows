@@ -1,8 +1,8 @@
-name: Windows v1.0 build
+name: Windows build and integration tests
 on:
   push:
     branches: [main]
-    paths-ignore: ['docs/**', 'README.md']
+    paths-ignore: ['docs/**', 'README.md', '.github/workflows/release-*.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,6 +15,12 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $version=([xml](Get-Content Directory.Build.props -Raw)).Project.PropertyGroup.Version
+          "value=$version" >> $env:GITHUB_OUTPUT
       - name: Ensure Inno Setup
         shell: pwsh
         run: |
@@ -28,12 +34,13 @@ jobs:
       - name: Upload installer and portable package
         uses: actions/upload-artifact@v4
         with:
-          name: AiInputAssistant-1.0.0-win-x64
+          name: AiInputAssistant-${{ steps.version.outputs.value }}-win-x64
           path: |
             artifacts/*.exe
             artifacts/*.zip
             artifacts/SHA256SUMS.txt
             artifacts/smoke.txt
+            artifacts/smoke.txt.png
           if-no-files-found: error
           retention-days: 30
       - name: Upload dependency locks

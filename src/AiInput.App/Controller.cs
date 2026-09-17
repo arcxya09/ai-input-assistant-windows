@@ -11,6 +11,7 @@ namespace AiInput.App;
 public sealed class Controller : IDisposable
 {
     public Settings Settings {get;}=LocalStore.Load();
+    public UpdateCoordinator Updates {get;}
     readonly GenerationGate gate=new();
     readonly CompletionClient client=new();
     readonly ContextBroker broker=new();
@@ -29,9 +30,13 @@ public sealed class Controller : IDisposable
     public string HotkeyError {get;private set;}="";
     public event Action? Changed;
     public bool Enabled=>gate.Enabled;
+    public bool IsQuitting=>disposed;
     public Controller()
     {
         overlay=new(Settings);
+        overlay.OpenSettingsRequested+=OpenSettings;
+        overlay.ToggleRequested+=Toggle;
+        overlay.ExitRequested+=Quit;
         overlay.BoundsSaved+=()=>{try{LocalStore.Save(Settings);}catch(Exception e){LocalStore.Log("SaveSettingsFailed",e);}};
         monitor=new();
         monitor.Watching=()=>gate.Enabled||context!=null||generating;
@@ -39,18 +44,21 @@ public sealed class Controller : IDisposable
         monitor.Activity+=()=>dispatcher.TryEnqueue(Activity);
         monitor.SessionPause+=()=>dispatcher.TryEnqueue(()=>Pause("已暂停：会话或电源状态改变"));
         monitor.Hotkey+=id=>dispatcher.TryEnqueue(()=>HandleHotkey(id));
-        tray=new Forms.NotifyIcon{Text="AI 输入助手 · 已暂停",Icon=Drawing.SystemIcons.Application,Visible=true};
+        tray=new Forms.NotifyIcon{Text="AI 输入助手 · 已暂停",Icon=new Drawing.Icon(Path.Combine(AppContext.BaseDirectory,"Assets","App.ico")),Visible=true};
         var menu=new Forms.ContextMenuStrip();
         menu.Items.Add("设置",null,(_,_)=>dispatcher.TryEnqueue(OpenSettings));
+        menu.Items.Add("检查更新",null,(_,_)=>dispatcher.TryEnqueue(()=>{OpenSettings();_=Updates.CheckAsync();}));
         menu.Items.Add("启用／暂停",null,(_,_)=>dispatcher.TryEnqueue(Toggle));
         menu.Items.Add("退出",null,(_,_)=>dispatcher.TryEnqueue(Quit));
         tray.ContextMenuStrip=menu;
         tray.DoubleClick+=(_,_)=>dispatcher.TryEnqueue(OpenSettings);
+        tray.BalloonTipClicked+=(_,_)=>dispatcher.TryEnqueue(OpenSettings);
+        Updates=new(Settings,message=>tray.ShowBalloonTip(7000,"AI 输入助手 · 更新",message,Forms.ToolTipIcon.Info),Quit);
         HotkeyError=monitor.Register(Settings);
         if(!monitor.HooksAvailable)HotkeyError+=" 输入监听不可用";
         timer=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(100)};
         timer.Tick+=async(_,_)=>await TickAsync();
-        timer.Start();LocalStore.Log("StartedPaused");
+        timer.Start();SetStatus("已暂停 · 按快捷键启用");LocalStore.Log("StartedPaused");
     }
     public void OpenSettings()
     {
@@ -60,11 +68,14 @@ public sealed class Controller : IDisposable
             window.Closed+=(_,_)=>window=null;
         }
         window.Activate();
+        if(window.AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)presenter.Restore();
     }
     void SetStatus(string status)
     {
+        if(disposed)return;
         Status=status;
         tray.Text="AI 输入助手 · "+(gate.Enabled?"已启用":"已暂停");
+        overlay.SetStatus(status,gate.Enabled,generating);
         Changed?.Invoke();
     }
     void Invalidate()
@@ -75,6 +86,7 @@ public sealed class Controller : IDisposable
     }
     public void Pause(string reason="已暂停")
     {
+        if(disposed)return;
         gate.SetEnabled(false);Invalidate();due=DateTime.MaxValue;
         SetStatus(reason);
         _=ClearHostAsync();
@@ -97,6 +109,7 @@ public sealed class Controller : IDisposable
         // Even while inserting, a real input invalidates the request generation.
         Invalidate();
         due=gate.Enabled?DateTime.UtcNow.AddMilliseconds(1500):DateTime.MaxValue;
+        SetStatus(gate.Enabled?"已启用 · 等待输入停顿":"已暂停");
     }
     async void HandleHotkey(int id)
     {
@@ -168,7 +181,7 @@ public sealed class Controller : IDisposable
                 if(!gate.IsCurrent(revision))return;
                 image=ScreenCapture.Capture((nint)target.Window);
             }
-            SetStatus(screenshot?"正在根据截图生成…":"正在续写…");
+            SetStatus(screenshot?"已识别输入框 · 正在根据截图续写…":$"已识别 {target.Before.Length+target.After.Length} 字 · 正在续写…");
             var result=await client.GenerateAsync(key,target,image,ct);
             image=null; // Request content owns and clears the image.
             if(!gate.IsCurrent(revision))return;
@@ -236,7 +249,14 @@ public sealed class Controller : IDisposable
     public async Task SmokeAsync()
     {
         var reply=await broker.CallAsync(new("ping"),CancellationToken.None);
-        if(!reply.Ok||window==null||!monitor.HooksAvailable)throw new InvalidOperationException("SmokeFailed");
+        if(!reply.Ok||window==null||!monitor.HooksAvailable||!overlay.Visible)throw new InvalidOperationException("SmokeFailed");
+        window.Close();
+        await Task.Delay(200);
+        if(window==null||window.AppWindow.Presenter is not Microsoft.UI.Windowing.OverlappedPresenter presenter||presenter.State!=Microsoft.UI.Windowing.OverlappedPresenterState.Minimized)
+            throw new InvalidOperationException("TaskbarPersistenceFailed");
+        OpenSettings();
+        await Task.Delay(300);
+        if(Program.SmokePath!=null)File.WriteAllBytes(Program.SmokePath+".png",ScreenCapture.Capture(WinRT.Interop.WindowNative.GetWindowHandle(window)));
     }
     static string Explain(string code)=>code switch
     {
@@ -258,8 +278,8 @@ public sealed class Controller : IDisposable
     public void Dispose()
     {
         if(disposed)return;disposed=true;
-        timer.Stop();cancel.Cancel();
-        tray.Visible=false;tray.Dispose();monitor.Dispose();overlay.Dispose();broker.Dispose();client.Dispose();
+        timer.Stop();cancel.Cancel();Updates.Dispose();
+        tray.Visible=false;var icon=tray.Icon;tray.Dispose();icon?.Dispose();monitor.Dispose();overlay.Dispose();broker.Dispose();client.Dispose();
         cancel.Dispose();
     }
 }

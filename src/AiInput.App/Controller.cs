@@ -47,7 +47,7 @@ public sealed class Controller : IDisposable
         tray=new Forms.NotifyIcon{Text="AI 输入助手 · 已暂停",Icon=new Drawing.Icon(Path.Combine(AppContext.BaseDirectory,"Assets","App.ico")),Visible=true};
         var menu=new Forms.ContextMenuStrip();
         menu.Items.Add("设置",null,(_,_)=>dispatcher.TryEnqueue(OpenSettings));
-        menu.Items.Add("检查更新",null,(_,_)=>dispatcher.TryEnqueue(()=>{OpenSettings();_=Updates.CheckAsync();}));
+        menu.Items.Add("检查更新",null,(_,_)=>dispatcher.TryEnqueue(()=>{OpenSettings();_=Updates?.CheckAsync();}));
         menu.Items.Add("启用／暂停",null,(_,_)=>dispatcher.TryEnqueue(Toggle));
         menu.Items.Add("退出",null,(_,_)=>dispatcher.TryEnqueue(Quit));
         tray.ContextMenuStrip=menu;

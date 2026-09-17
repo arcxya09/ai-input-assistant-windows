@@ -21,7 +21,7 @@
 <FrameworkReference Include="Microsoft.WindowsDesktop.App"/>
 </ItemGroup>
 <ItemGroup><Using Remove="System.Windows.Forms"/><Using Remove="System.Drawing"/></ItemGroup>
-<ItemGroup><Content Include="Assets/App.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"/></ItemGroup>
+<ItemGroup><Content Update="Assets/App.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"/></ItemGroup>
 <Target Name="PublishAppPri" AfterTargets="ComputeFilesToPublish">
 <Error Condition="'$(ProjectPriFullPath)' == '' Or !Exists('$(ProjectPriFullPath)')" Text="Generated application PRI is missing."/>
 <ItemGroup><ResolvedFileToPublish Include="$(ProjectPriFullPath)" RelativePath="$(AssemblyName).pri" CopyToPublishDirectory="PreserveNewest"/></ItemGroup>

@@ -82,8 +82,12 @@ internal static class ObsidianTests
                 await Task.Delay(300);
                 var multi=await broker.CallAsync(new("capture"),default);
                 if(!multi.Ok||multi.Snapshot==null)throw new Exception("Obsidian multi-paragraph "+mode+" "+backward+": "+multi.Code);
-                if(multi.Snapshot.SelectedText.Replace("\r\n","\n").TrimEnd('\n')!=full)
-                    throw new Exception("Obsidian multi-paragraph selection incomplete: chars="+multi.Snapshot.SelectedText.Length);
+                // UIA represents visual paragraph boundaries, which may omit
+                // Markdown's extra empty lines. Compare every nonempty paragraph
+                // verbatim; never ignore missing words or boundaries inside prose.
+                static string Paragraphs(string value)=>string.Join("\n",value.Replace("\r\n","\n").Replace('\r','\n').Split('\n',StringSplitOptions.RemoveEmptyEntries));
+                if(Paragraphs(multi.Snapshot.SelectedText)!=Paragraphs(full))
+                    throw new Exception("Obsidian multi-paragraph selection incomplete: chars="+multi.Snapshot.SelectedText.Length+" fixture="+JsonSerializer.Serialize(multi.Snapshot.SelectedText));
                 await SelectionTests.Verify(broker,multi.Snapshot,multi.Snapshot.SelectedText);
                 if(File.ReadAllText(note).Replace("\r\n","\n")!=full)throw new Exception("Multi-paragraph copy changed Markdown");
                 Console.WriteLine("PASS real Obsidian "+mode+" multi-paragraph "+(backward?"backward":"forward")+" selection and clipboard");

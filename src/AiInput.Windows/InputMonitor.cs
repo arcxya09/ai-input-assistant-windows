@@ -9,7 +9,9 @@ public sealed class InputMonitor : Form
     public event Action<int>? Hotkey;
     public event Action? Activity;
     public event Action? SessionPause;
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public Func<bool>? Watching {get;set;}
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public Func<nint,bool>? IsOwnWindow {get;set;}
     public bool HooksAvailable => keyboard!=0&&mouse!=0;
     public InputMonitor()

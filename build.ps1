@@ -5,6 +5,9 @@ New-Item artifacts -ItemType Directory -Force | Out-Null
 Run-Dotnet run --project tests/AiInput.Tests/AiInput.Tests.csproj -c $Configuration
 Run-Dotnet publish src/AiInput.App/AiInput.App.csproj -c $Configuration -r win-x64 --self-contained true -o artifacts/app
 Run-Dotnet publish src/AiInput.ContextHost/AiInput.ContextHost.csproj -c $Configuration -r win-x64 --self-contained true -o artifacts/app/ContextHost
+Run-Dotnet publish tests/AiInput.Windows.Tests/AiInput.Windows.Tests.csproj -c $Configuration -r win-x64 --self-contained true -o artifacts/tests
+& artifacts/tests/AiInput.Windows.Tests.exe (Resolve-Path artifacts/app).Path
+if ($LASTEXITCODE -ne 0) { throw "Windows integration tests failed" }
 Copy-Item README.md,THIRD-PARTY-NOTICES.md artifacts/app/
 Copy-Item docs/user-guide.md artifacts/app/使用说明.md
 $required=@("AiInputAssistant.exe","AiInputAssistant.dll","AiInputAssistant.pri","ContextHost/AiInput.ContextHost.exe")

@@ -3,7 +3,7 @@ using System.IO.Pipes;
 using AiInput.Core;
 namespace AiInput.Windows;
 
-public sealed class ContextBroker : IDisposable
+public sealed class ContextBroker(string? appRoot = null) : IDisposable
 {
     NamedPipeServerStream? pipe;
     Process? process;
@@ -21,7 +21,7 @@ public sealed class ContextBroker : IDisposable
                 string name="AiInput-"+Guid.NewGuid().ToString("N");
                 pipe=new NamedPipeServerStream(name,PipeDirection.InOut,1,PipeTransmissionMode.Byte,
                     PipeOptions.Asynchronous|PipeOptions.CurrentUserOnly);
-                string exe=Path.Combine(AppContext.BaseDirectory,"ContextHost","AiInput.ContextHost.exe");
+                string exe=Path.Combine(appRoot ?? AppContext.BaseDirectory,"ContextHost","AiInput.ContextHost.exe");
                 var start=new ProcessStartInfo(exe){UseShellExecute=false,CreateNoWindow=true};
                 start.ArgumentList.Add(name);start.ArgumentList.Add(Environment.ProcessId.ToString());
                 process=Process.Start(start)??throw new IOException("HostStartFailed");
@@ -29,6 +29,11 @@ public sealed class ContextBroker : IDisposable
             }
             await Frames.WriteAsync(pipe,request,timeout.Token);
             return await Frames.ReadAsync<RpcReply>(pipe,timeout.Token);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            Reset();
+            throw;
         }
         catch
         {

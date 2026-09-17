@@ -22,7 +22,7 @@ public sealed class OneShotContent : HttpContent
         if(context.SelectedText.Length>TextPolicy.MaxSelectionChars)throw new InvalidDataException("SelectionTooLarge");
         string user = context.IsSelection ? JsonSerializer.Serialize(new { selection = context.SelectedText }) :
             JsonSerializer.Serialize(new { before = context.Before, after = context.After });
-        string start = "{\"model\":\"deepseek-flash\"," + ThinkingOptions.RequestFields(thinkingDepth) + "\"stream\":true,\"response_format\":{\"type\":\"json_object\"},\"messages\":[{\"role\":\"system\",\"content\":" +
+        string start = "{\"model\":\"deepseek-flash\"," + ThinkingOptions.RequestFields(thinkingDepth,ownedImage!=null) + "\"stream\":true,\"stream_options\":{\"include_usage\":true},\"response_format\":{\"type\":\"json_object\"},\"messages\":[{\"role\":\"system\",\"content\":" +
             JsonSerializer.Serialize(context.IsSelection ? CompletionClient.SelectionPrompt : CompletionClient.Prompt) + "},{\"role\":\"user\",\"content\":";
         if (ownedImage == null)
         {

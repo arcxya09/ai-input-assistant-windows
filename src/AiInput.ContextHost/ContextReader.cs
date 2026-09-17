@@ -105,9 +105,20 @@ public sealed class ContextReader : IDisposable
         }
         if(Pattern(element,10032) is IUIAutomationTextEditPattern edit)
         {
-            var composition=edit.GetActiveComposition();
-            if(composition!=null&&composition.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,composition,TextPatternRangeEndpoint.TextPatternRangeEndpoint_End)!=0)
-                throw new InvalidOperationException("Composing");
+            // Some providers retain an old composition range or expose one on
+            // an ancestor document. It must contain text and touch this caret
+            // (or overlap the explicit selection), not merely be non-collapsed.
+            try
+            {
+                var composition=edit.GetActiveComposition();
+                if(composition!=null&&!Collapsed(composition)&&composition.GetText(1).Length>0&&Contains(pattern.DocumentRange,composition))
+                {
+                    int startToEnd=composition.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,caret,TextPatternRangeEndpoint.TextPatternRangeEndpoint_End);
+                    int endToStart=composition.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_End,caret,TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start);
+                    if(CompositionPolicy.OverlapsFocus(startToEnd,endToStart,!hasSelection))throw new InvalidOperationException("Composing");
+                }
+            }
+            catch(COMException){/* Optional UIA IME metadata; still check IMM below. */}
         }
         if(NativeEditReader.IsComposing(NativeEditReader.FocusWindow(thread)))throw new InvalidOperationException("Composing");
         if(hasSelection)

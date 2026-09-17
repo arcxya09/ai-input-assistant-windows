@@ -1,16 +1,23 @@
-# AI 输入助手 v1.4.1
+# AI 输入助手 v1.4.2
 
 独立 Windows AI 输入助手。WinUI 3 设置界面，DeepSeek 官方文本／图像接口。输入停顿时从光标生成完整续写，用户逐条确认插入。
 
 ## 获取程序
 
-从 [GitHub Release v1.4.1](https://github.com/arcxya09/ai-input-assistant-windows/releases/tag/v1.4.1) 下载：
+从 [GitHub Release v1.4.2](https://github.com/arcxya09/ai-input-assistant-windows/releases/tag/v1.4.2) 下载：
 
-- [安装版 EXE](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.4.1/AiInputAssistant-1.4.1-Setup-x64.exe)：每用户安装程序。
-- [便携版 ZIP](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.4.1/AiInputAssistant-1.4.1-win-x64.zip)：完整解压后运行 `AiInputAssistant.exe`。
-- [SHA256SUMS.txt](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.4.1/SHA256SUMS.txt)：校验值。
+- [安装版 EXE](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.4.2/AiInputAssistant-1.4.2-Setup-x64.exe)：每用户安装程序。
+- [便携版 ZIP](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.4.2/AiInputAssistant-1.4.2-win-x64.zip)：完整解压后运行 `AiInputAssistant.exe`。
+- [SHA256SUMS.txt](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.4.2/SHA256SUMS.txt)：校验值。
 
 程序已包含所需运行时。不要单独复制主程序 EXE；它需要同目录的运行时、PRI 和 ContextHost。
+
+## v1.4.2 更新
+
+- 等待选词期间自动复查，提交候选词后无需再次敲键；过滤与当前光标或选区无关的组合输入范围。
+- 自动思考对文本续写使用 low，对截图使用 high，Max 与不思考仍可选；不会因上下文长而自动加深。
+- 提示词强调充分展开一段内容，避免仅做空泛收尾；正文不按字数裁剪。
+- 浮窗显示等待响应／思考／生成正文阶段和耗时，达到模型输出上限时单独提示。
 
 ## v1.4.1 更新
 
@@ -88,7 +95,7 @@ Windows 上安装 .NET SDK 10.0.401、Windows SDK 和 Inno Setup 6，运行：
 ## 文档
 
 - [使用说明](docs/user-guide.md)
-- [v1.4.1 更新与验证记录](docs/releases/v1.4.1.md)
+- [v1.4.2 更新与验证记录](docs/releases/v1.4.2.md)
 - [v1.2 更新与验证记录](docs/releases/v1.2.0.md)
 - [v1.1 实现与验证记录](docs/implementation-v1.1.md)
 - [需求基线](docs/requirements.md)

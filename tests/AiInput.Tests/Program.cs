@@ -27,6 +27,13 @@ async Task Reject(Func<Task> action,string name)
     bool failed=false;try{await action();}catch{failed=true;}Check(failed,name);
 }
 var gate=new GenerationGate();
+// Range comparisons supplied by UIA: stale ranges in other text must not
+// disable this input, while pending text at either caret boundary still blocks.
+Check(!CompositionPolicy.OverlapsFocus(-1,-1,true),"stale IME range before caret ignored");
+Check(!CompositionPolicy.OverlapsFocus(1,1,true),"unrelated IME range after caret ignored");
+Check(CompositionPolicy.OverlapsFocus(-1,0,true)&&CompositionPolicy.OverlapsFocus(0,1,true),"caret at active composition boundary remains protected");
+Check(!CompositionPolicy.OverlapsFocus(-1,0,false)&&!CompositionPolicy.OverlapsFocus(0,1,false),"explicit selection adjacent to stale IME range remains usable");
+Check(CompositionPolicy.OverlapsFocus(-1,1,false),"selection overlapping active composition remains protected");
 Check(!gate.Enabled,"starts paused");
 gate.SetEnabled(true);long old=gate.Revision;gate.Invalidate();
 Check(!gate.Offer(old,"旧建议"),"late response rejected");

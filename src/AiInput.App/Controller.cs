@@ -170,13 +170,14 @@ public sealed class Controller : IDisposable
         long revision=gate.Revision;
         var ct=cancel.Token;
         byte[]? image=null;
+        DispatcherTimer? progressTimer=null;
         try
         {
             foreground=Native.GetForegroundWindow();
-            SetStatus("正在识别输入框…");
+            if(Status!=Explain("Composing"))SetStatus("正在识别输入框…");
             var capture=await broker.CallAsync(new("capture"),ct);
             if(!gate.IsCurrent(revision))return;
-            if(!capture.Ok||capture.Snapshot==null){LocalStore.Log("CaptureFailed_"+capture.Code);SetStatus(Explain(capture.Code));return;}
+            if(!capture.Ok||capture.Snapshot==null){HandleCaptureFailure(capture.Code);return;}
             context=capture.Snapshot;
             var target=context;
             LocalStore.Log("ContextCaptured",mode:target.IsSelection?"selection":"caret",beforeChars:target.Before.Length,afterChars:target.After.Length,selectionChars:target.SelectedText.Length);
@@ -190,14 +191,29 @@ public sealed class Controller : IDisposable
                 image=ScreenCapture.Capture((nint)target.Window);
             }
             SetStatus(target.IsSelection?$"已选中 {target.SelectedText.Length} 字 · 正在续写…":screenshot?"已识别输入框 · 正在根据截图续写…":$"已识别 {target.Before.Length+target.After.Length} 字 · 正在续写…");
-            var result=await client.GenerateAsync(key,target,image,ct,Settings.ThinkingDepth);
+            var elapsed=System.Diagnostics.Stopwatch.StartNew();
+            CompletionPhase phase=CompletionPhase.Waiting;
+            var progress=new Progress<CompletionProgress>(p=>{if(gate.IsCurrent(revision)&&generating)phase=p.Phase;});
+            progressTimer=new DispatcherTimer{Interval=TimeSpan.FromSeconds(1)};
+            progressTimer.Tick+=(_,_)=>
+            {
+                if(!gate.IsCurrent(revision)||!generating)return;
+                string stage=phase switch{CompletionPhase.Thinking=>"正在思考",CompletionPhase.Writing=>"正在生成正文",_=>"正在等待响应"};
+                SetStatus($"{stage} · {(int)elapsed.Elapsed.TotalSeconds} 秒");
+            };
+            progressTimer.Start();
+            string requestedDepth=Settings.ThinkingDepth;
+            string effort=ThinkingOptions.Effort(requestedDepth,image!=null);
+            var result=await client.GenerateAsync(key,target,image,ct,requestedDepth,progress,
+                stats=>LocalStore.LogCompletion(stats.ElapsedMs,stats.FirstContentMs,stats.ReasoningChars,stats.OutputChars,stats.FinishReason,
+                    stats.PromptTokens,stats.CompletionTokens,stats.ReasoningTokens,effort,stats.ResultChars));
             image=null; // Request content owns and clears the image.
             if(!gate.IsCurrent(revision))return;
             var valid=await broker.CallAsync(new("probe",target.Token),ct);
             if(!gate.IsCurrent(revision)||!valid.Ok){Invalidate();return;}
             string? text=TextPolicy.Accept(result,target.IsSelection?target.SelectedText:target.Before,target.IsSelection?"":target.After);
-            if(text==null){Invalidate();SetStatus("本次没有合适的续写，继续输入后再试");return;}
-            if(gate.Offer(revision,text)){overlay.Present(text,target.IsSelection);SetStatus(target.IsSelection?"选区续写就绪，按采纳快捷键复制":"建议已就绪，按采纳快捷键插入");}
+            if(text==null){LocalStore.Log("CompletionRejectedByTextPolicy");Invalidate();SetStatus("本次没有合适的续写，继续输入后再试");return;}
+            if(gate.Offer(revision,text)){LocalStore.Log("CompletionOffered");overlay.Present(text,target.IsSelection);SetStatus(target.IsSelection?"选区续写就绪，按采纳快捷键复制":"建议已就绪，按采纳快捷键插入");}
         }
         catch(OperationCanceledException)
         {
@@ -218,7 +234,16 @@ public sealed class Controller : IDisposable
             if(gate.IsCurrent(revision)&&!disposed){Invalidate();SetStatus("生成失败，请检查网络或导出诊断日志");}
             LocalStore.Log("GenerationFailed",e);
         }
-        finally{if(image!=null)Array.Clear(image);generating=false;}
+        finally{progressTimer?.Stop();if(image!=null)Array.Clear(image);generating=false;}
+    }
+    void HandleCaptureFailure(string code)
+    {
+        string message=Explain(code);
+        if(Status!=message)LocalStore.Log("CaptureFailed_"+code);
+        // A commit may occur through touch/IME UI without another keyboard hook.
+        // Re-read while waiting; never bypass an active composition after a timeout.
+        due=gate.Enabled&&code=="Composing"?DateTime.UtcNow.AddMilliseconds(750):DateTime.MaxValue;
+        if(Status!=message)SetStatus(message);
     }
     async Task AcceptAsync()
     {
@@ -278,6 +303,17 @@ public sealed class Controller : IDisposable
         if(Native.GetForegroundWindow()!=settingsHandle)throw new InvalidOperationException("SmokeFocusSetupFailed");
         overlay.VerifyDisplay(Program.SmokePath==null?null:Program.SmokePath+".png");
         if(overlay.IsDisplayed)throw new InvalidOperationException("SmokeLeftPausedOverlayVisible");
+        gate.SetEnabled(true);
+        due=DateTime.MaxValue;
+        HandleCaptureFailure("Composing");
+        if(due<=DateTime.UtcNow||due>DateTime.UtcNow.AddSeconds(1))throw new InvalidOperationException("CompositionWaitNeverRechecks");
+        HandleCaptureFailure("Composing");
+        if(due==DateTime.MaxValue)throw new InvalidOperationException("RepeatedCompositionWaitStuck");
+        Pause();
+        if(due!=DateTime.MaxValue||overlay.IsDisplayed)throw new InvalidOperationException("PausedCompositionRetryActive");
+        HandleCaptureFailure("Composing");
+        if(due!=DateTime.MaxValue||overlay.IsDisplayed)throw new InvalidOperationException("LateCompositionRetryResurrected");
+        SetStatus("已暂停");
         var legacy=System.Text.Json.JsonSerializer.Deserialize<Settings>("{\"Schema\":1,\"FontSize\":19}")!;
         if(legacy.ThinkingDepth!="auto"||legacy.FontSize!=19)throw new InvalidOperationException("ThinkingMigrationFailed");
         var previousDefault=LocalStore.ParseSettings("{\"Schema\":1,\"FontSize\":16,\"ThinkingDepth\":\"max\",\"Opacity\":0.7,\"X\":250}");
@@ -316,6 +352,7 @@ public sealed class Controller : IDisposable
         "NoContinuation"=>"本次没有生成续写，请调整内容后重试",
         "InvalidCompletionFormat"=>"续写返回异常，本次未展示，请重试",
         "IncompleteResponse"=>"续写未完整结束，本次未插入，请重新触发",
+        "OutputLimitReached"=>"模型达到输出上限，本次未展示或插入，请重新触发",
         "InsertRejected"=>"输入位置已经变化，本条建议已取消",
         "InsertUncertain"=>"插入结果未确认，已暂停，未自动重试",
         _=>"当前操作未完成："+(code.StartsWith("Http")?"服务暂不可用":"输入目标暂不可用")

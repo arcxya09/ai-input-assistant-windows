@@ -93,6 +93,7 @@ public sealed class SuggestionWindow : Form
             if(status.StartsWith("建议已就绪"))return "续写已就绪";
             if(status.Contains("候选词"))return "等待选词";
             if(status.Contains("未完整结束"))return "续写未完成";
+            if(status.Contains("达到输出上限"))return "输出达到上限";
             if(status.Contains("API Key"))return "请设置 API Key";
             if(status.Contains("没有合适"))return "暂无合适续写";
             if(status.Contains("请将光标"))return "等待输入框";

@@ -181,7 +181,7 @@ user 消息以 JSON 序列化的 before／after 字段传递文本；截图请�
 
 设置页使用 WinUI 3：API Key、快捷键状态、浮窗字号与背景透明度、诊断导出。建议窗为独立顶层窗口，采用 WS_EX_NOACTIVATE／TOOLWINDOW、无激活显示及 WM_MOUSEACTIVATE 处理；不为显示建议调用 Activate 或 SetForegroundWindow。[窗口样式](https://learn.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles)
 
-字号初值 16 DIP、背景不透明度 85%、窗口初始宽 420 DIP，均为可调工程初值；只改变背景 alpha，保持文字清晰。Win10 透明合成与 WinUI HWND 组合需 M0 验证，必要时采用原生合成承载浮窗，设置页仍为 WinUI 3。拖拽／缩放不激活目标外窗口。
+字号初值 14 DIP、背景不透明度 85%、预览初始宽 420 像素，均为可调工程初值；只改变背景 alpha，保持文字清晰。Win10 透明合成与 WinUI HWND 组合需 M0 验证，必要时采用原生合成承载浮窗，设置页仍为 WinUI 3。拖拽／缩放不激活目标外窗口。
 
 位置使用显示器标识、DIP 尺寸和相对工作区偏移保存。显示器拔出或 DPI 改变时，把窗口限制在可见工作区；用户调整期间临时冻结自动布局。高对比度模式保持可读。
 
@@ -229,3 +229,6 @@ v1.3.1：SSE 可选字段为 null 或空数组时按未调用工具处理，真�
 
 
 v1.4：浮窗显隐由启用状态控制，暂停时清空正文并隐藏，迟到的 Present 调用不能恢复旧浮窗。状态、正文、底部提示共用字体与字号，按 DPI 布局；预乘 alpha 位图以 2 倍分辨率绘制，再平滑缩小（超大位图直接按实际像素绘制）。自动思考不传 reasoning_effort，Max 传 max，关闭传 none；思考分片不写入正文缓冲区或日志，传输上限单独放宽至 128 MiB，最终正文上限仍为 8192 UTF-16 单元。
+
+
+v1.4.1：先创建隐藏 HWND，通过 GetDpiForWindow 获取所在显示器缩放，再测量文字、绘制并显示首帧。浮窗自绘像素关闭 WinForms 自动缩放，WM_DPICHANGED 更新有效 DPI 和建议位置后重新布局，避免双重缩放。布局过程抑制中途的 Resize 绘制。默认字号为 14 DIP（胶囊约 31 DIP 高），旧默认 16 迁移一次；AppearanceVersion 标记确保升级后自行选择 16 不再被改回。首帧与 DPI 消息检查覆盖 100%／125%／150%／200%／250%，使用合成 DPI 输入和真实 HWND；实体混合 DPI 显示器仍需实机验证。

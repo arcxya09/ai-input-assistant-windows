@@ -29,6 +29,8 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "Inno Setup installation failed" }
           }
       - name: Test, publish and smoke test
+        env:
+          AIINPUT_CI_GITHUB_TOKEN: ${{ github.token }}
         shell: pwsh
         run: ./build.ps1
       - name: Upload installer and portable package

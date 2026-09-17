@@ -5,8 +5,11 @@ using AiInput.DeepSeek;
 if(args is ["--github-update-smoke"])
 {
     using var http=new HttpClient{Timeout=Timeout.InfiniteTimeSpan};
+    string? ciToken=Environment.GetEnvironmentVariable("AIINPUT_CI_GITHUB_TOKEN");
+    if(!string.IsNullOrEmpty(ciToken))http.DefaultRequestHeaders.Authorization=new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",ciToken);
     var updates=new UpdateClient(http);
     var release=await updates.CheckAsync(new Version(0,0,0),default)??throw new Exception("No public GitHub release");
+    http.DefaultRequestHeaders.Authorization=null; // Never forward CI credentials to release downloads.
     string directory=Path.Combine(Path.GetTempPath(),"AiInput-live-update-"+Guid.NewGuid().ToString("N"));
     try
     {

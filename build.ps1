@@ -5,6 +5,7 @@ function Run-Dotnet { & dotnet @args; if ($LASTEXITCODE -ne 0) { throw "dotnet f
 New-Item artifacts -ItemType Directory -Force | Out-Null
 Run-Dotnet run --project tests/AiInput.Tests/AiInput.Tests.csproj -c $Configuration
 Run-Dotnet run --project tests/AiInput.Tests/AiInput.Tests.csproj -c $Configuration --no-build -- --github-update-smoke
+Remove-Item Env:AIINPUT_CI_GITHUB_TOKEN -ErrorAction SilentlyContinue
 Run-Dotnet publish src/AiInput.App/AiInput.App.csproj -c $Configuration -r win-x64 --self-contained true -o artifacts/app
 Run-Dotnet publish src/AiInput.ContextHost/AiInput.ContextHost.csproj -c $Configuration -r win-x64 --self-contained true -o artifacts/app/ContextHost
 Run-Dotnet publish src/AiInput.UpdateHost/AiInput.UpdateHost.csproj -c $Configuration -r win-x64 --self-contained true -o artifacts/app/Updater

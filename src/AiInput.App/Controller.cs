@@ -193,18 +193,18 @@ public sealed class Controller : IDisposable
             var valid=await broker.CallAsync(new("probe",target.Token),ct);
             if(!gate.IsCurrent(revision)||!valid.Ok){Invalidate();return;}
             string? text=TextPolicy.Accept(result,target.IsSelection?target.SelectedText:target.Before,target.IsSelection?"":target.After);
-            if(text==null){context=null;SetStatus("本次没有合适的续写，继续输入后再试");return;}
+            if(text==null){Invalidate();SetStatus("本次没有合适的续写，继续输入后再试");return;}
             if(gate.Offer(revision,text)){overlay.Present(text,target.IsSelection);SetStatus(target.IsSelection?"选区续写就绪，按采纳快捷键复制":"建议已就绪，按采纳快捷键插入");}
         }
         catch(OperationCanceledException)
         {
-            if(gate.IsCurrent(revision)){context=null;SetStatus("请求超时，请继续输入或重新截图");}
+            if(gate.IsCurrent(revision)&&!disposed){Invalidate();SetStatus("请求超时，请继续输入或重新截图");}
         }
         catch(ProviderException e)
         {
-            if(gate.IsCurrent(revision))
+            if(gate.IsCurrent(revision)&&!disposed)
             {
-                context=null;cooldown=DateTime.UtcNow.AddSeconds(e.CooldownSeconds);
+                Invalidate();cooldown=DateTime.UtcNow.AddSeconds(e.CooldownSeconds);
                 SetStatus(Explain(e.Code));
                 if(e.Code is "ApiKeyInvalid" or "BalanceInsufficient")Pause(Explain(e.Code));
             }
@@ -212,7 +212,7 @@ public sealed class Controller : IDisposable
         }
         catch(Exception e)
         {
-            if(gate.IsCurrent(revision)){context=null;SetStatus("生成失败，请检查网络或导出诊断日志");}
+            if(gate.IsCurrent(revision)&&!disposed){Invalidate();SetStatus("生成失败，请检查网络或导出诊断日志");}
             LocalStore.Log("GenerationFailed",e);
         }
         finally{if(image!=null)Array.Clear(image);generating=false;}
@@ -289,6 +289,12 @@ public sealed class Controller : IDisposable
         "ApiKeyInvalid"=>"API Key 无效，请在设置中重新填写",
         "BalanceInsufficient"=>"DeepSeek 账户余额不足",
         "RateLimited"=>"请求受到限流，稍后可重试",
+        "StreamError"=>"续写服务返回错误，请稍后重试",
+        "UnexpectedToolCall"=>"续写返回异常，本次未展示，请重试",
+        "InsufficientContext"=>"上下文不足，请补充文字或调整选区",
+        "CannotContinue"=>"本次无法续写，请调整内容后重试",
+        "NoContinuation"=>"本次没有生成续写，请调整内容后重试",
+        "InvalidCompletionFormat"=>"续写返回异常，本次未展示，请重试",
         "IncompleteResponse"=>"续写未完整结束，本次未插入，请重新触发",
         "InsertRejected"=>"输入位置已经变化，本条建议已取消",
         "InsertUncertain"=>"插入结果未确认，已暂停，未自动重试",

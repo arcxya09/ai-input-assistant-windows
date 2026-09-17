@@ -6,13 +6,15 @@
 
 从 [GitHub Release v1.3.0](https://github.com/arcxya09/ai-input-assistant-windows/releases/tag/v1.3.0) 下载：
 
-- [安装版 EXE](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.3.0/AiInputAssistant-1.1.0-Setup-x64.exe)：每用户安装程序。
-- [便携版 ZIP](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.3.0/AiInputAssistant-1.1.0-win-x64.zip)：完整解压后运行 `AiInputAssistant.exe`。
+- [安装版 EXE](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.3.0/AiInputAssistant-1.3.0-Setup-x64.exe)：每用户安装程序。
+- [便携版 ZIP](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.3.0/AiInputAssistant-1.3.0-win-x64.zip)：完整解压后运行 `AiInputAssistant.exe`。
 - [SHA256SUMS.txt](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.3.0/SHA256SUMS.txt)：校验值。
 
 程序已包含所需运行时。不要单独复制主程序 EXE；它需要同目录的运行时、PRI 和 ContextHost。
 
 ## v1.3 新增
+
+- 光标与选区使用各自的提示词，并明确区分成功与失败状态；失败、上下文不足或响应格式异常时只显示状态，不展示或复制模型说明。
 
 - 增加 Electron 辅助功能唤醒、更深层的编辑器定位、折叠选区光标回退和 IAccessible2 文本接口，改善 Obsidian 等编辑器的识别。
 - 有选中文字时只根据选区续写，Ctrl+Alt+Enter 复制结果到剪贴板，原文和选区保持不变；不读取选区外内容作为生成上下文，也不附带截图。

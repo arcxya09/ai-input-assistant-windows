@@ -51,6 +51,10 @@ public sealed class SuggestionWindow : Form
             if(status.StartsWith("已选中"))return status.Replace(" · 正在续写…"," · 续写中…");
             if(status.StartsWith("选区续写"))return "选区续写就绪";
             if(status.StartsWith("已复制"))return "已复制";
+            if(status.StartsWith("上下文不足"))return "上下文不足";
+            if(status.StartsWith("本次无法续写"))return "暂无法续写";
+            if(status.StartsWith("本次没有生成"))return "暂无续写";
+            if(status.StartsWith("续写返回异常"))return "续写返回异常";
             if(status.StartsWith("已识别"))return status.Contains("截图")?"截图续写中…":status.Replace(" · 正在续写…"," · 续写中…");
             if(status.StartsWith("建议已就绪"))return "续写已就绪";
             if(status.Contains("候选词"))return "等待选词";

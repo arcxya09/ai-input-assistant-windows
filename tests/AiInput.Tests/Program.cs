@@ -110,5 +110,6 @@ using(var memory=new MemoryStream())
     await Frames.WriteAsync(memory,new RpcReply(true,"Ready",large),default);memory.Position=0;
     Check((await Frames.ReadAsync<RpcReply>(memory,default)).Snapshot?.SelectedText==large.SelectedText,"full selection fits IPC without truncation");
 }
+count+=await CompletionTests.Run();
 count+=await UpdateTests.Run();
 Console.WriteLine("TOTAL "+count+" PASSED");

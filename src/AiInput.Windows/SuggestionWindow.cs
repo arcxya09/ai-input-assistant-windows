@@ -260,6 +260,19 @@ public sealed class SuggestionWindow : Form
             if(Native.GetForegroundWindow()!=foreground)throw new InvalidOperationException("CapsuleStoleFocus");
             Conceal();SetStatus("已启用",true,false);
             if(Width!=compact)throw new InvalidOperationException("CapsuleDidNotShrink");
+            double oldSize=settings.FontSize;
+            try
+            {
+                foreach(int size in new[]{12,16,24,32})
+                {
+                    settings.FontSize=size;Conceal();SetStatus("已启用",true,false);int height=Height;
+                    SetStatus("已选中 120 字 · 正在续写…",true,true);
+                    if(Height!=height||Height!=CapsuleHeight)throw new InvalidOperationException("StatusFontLayoutChanged");
+                    Present("完整正文需要能与操作提示一起清楚显示。",true);
+                    if(BodyHeight<LabelSize*DpiScale)throw new InvalidOperationException("UnifiedFontClipped");
+                }
+            }
+            finally{settings.FontSize=oldSize;Conceal();SetStatus("已启用",true,false);}
             if(previewPath!=null)SavePreview(previewPath);
             SetStatus("已暂停",false,false);
             if(Visible)throw new InvalidOperationException("PauseDidNotHide");

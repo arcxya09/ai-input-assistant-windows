@@ -176,9 +176,12 @@ public sealed class Controller : IDisposable
             SetStatus("正在识别输入框…");
             var capture=await broker.CallAsync(new("capture"),ct);
             if(!gate.IsCurrent(revision))return;
-            if(!capture.Ok||capture.Snapshot==null){SetStatus(Explain(capture.Code));return;}
+            if(!capture.Ok||capture.Snapshot==null){LocalStore.Log("CaptureFailed_"+capture.Code);SetStatus(Explain(capture.Code));return;}
             context=capture.Snapshot;
             var target=context;
+            LocalStore.Log("ContextCaptured",mode:target.IsSelection?"selection":"caret",beforeChars:target.Before.Length,afterChars:target.After.Length,selectionChars:target.SelectedText.Length);
+            if(!screenshot&&!target.IsSelection&&string.IsNullOrWhiteSpace(target.Before)&&string.IsNullOrWhiteSpace(target.After))
+            {Invalidate();SetStatus("已识别空输入框，请输入或选中文字后再试");return;}
             if(screenshot&&!target.IsSelection)
             {
                 overlay.Conceal();
@@ -291,7 +294,8 @@ public sealed class Controller : IDisposable
         "RateLimited"=>"请求受到限流，稍后可重试",
         "StreamError"=>"续写服务返回错误，请稍后重试",
         "UnexpectedToolCall"=>"续写返回异常，本次未展示，请重试",
-        "InsufficientContext"=>"上下文不足，请补充文字或调整选区",
+        "InsufficientContext"=>"已读取文字，但模型未找到续写方向，请调整内容后重试",
+        "ContextUnavailable" or "NoFocus" or "TargetChanged"=>"未能稳定读取光标或选区，请停留片刻后重试",
         "CannotContinue"=>"本次无法续写，请调整内容后重试",
         "NoContinuation"=>"本次没有生成续写，请调整内容后重试",
         "InvalidCompletionFormat"=>"续写返回异常，本次未展示，请重试",

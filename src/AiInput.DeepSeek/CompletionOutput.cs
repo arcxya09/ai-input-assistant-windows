@@ -11,7 +11,8 @@ public static class CompletionOutput
         {
             using var doc=JsonDocument.Parse(raw.Text,new JsonDocumentOptions{MaxDepth=4});
             var root=doc.RootElement;
-            if(root.ValueKind!=JsonValueKind.Object||root.EnumerateObject().Count()!=2||
+            if(root.ValueKind!=JsonValueKind.Object||root.EnumerateObject().Count(p=>p.Name=="status")!=1||
+                root.EnumerateObject().Count(p=>p.Name=="text")!=1||
                 !root.TryGetProperty("status",out var status)||status.ValueKind!=JsonValueKind.String||
                 !root.TryGetProperty("text",out var content)||content.ValueKind!=JsonValueKind.String)
                 throw new ProviderException("InvalidCompletionFormat");

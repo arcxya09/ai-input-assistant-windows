@@ -66,6 +66,28 @@ internal static class ObsidianTests
             await SelectionTests.Verify(broker,selection.Snapshot,"新增");
             if(File.ReadAllText(note)!="前文新增后文")throw new Exception("Obsidian source changed while copying");
             Console.WriteLine("PASS real Obsidian "+mode+" selection-only context, clipboard output and unchanged Markdown");
+            // Exercise a realistic note spanning paragraphs in both selection directions.
+            string extra="\n\n提高效率需要先明确目标，再将复杂的任务拆分为可以逐步完成的小步骤。\n\n在安排计划时，我们还需要考虑实际情况，并为后续调整留出空间。";
+            Chord(0x11,0x23);
+            foreach(string paragraph in extra.Split('\n').Skip(1)){Key(0x0D);if(paragraph.Length>0)Native.Inject(paragraph,process.MainWindowHandle);}
+            await Task.Delay(500);
+            string full="前文新增后文"+extra;
+            for(int i=0;i<30&&File.ReadAllText(note).Replace("\r\n","\n")!=full;i++)await Task.Delay(100);
+            if(File.ReadAllText(note).Replace("\r\n","\n")!=full)throw new Exception("Multi-paragraph fixture was not saved");
+            foreach(bool backward in new[]{false,true})
+            {
+                Chord(0x11,backward?(ushort)0x23:(ushort)0x24);
+                Send((0x11,false),(0x10,false),(backward?(ushort)0x24:(ushort)0x23,false),
+                    (backward?(ushort)0x24:(ushort)0x23,true),(0x10,true),(0x11,true));
+                await Task.Delay(300);
+                var multi=await broker.CallAsync(new("capture"),default);
+                if(!multi.Ok||multi.Snapshot==null)throw new Exception("Obsidian multi-paragraph "+mode+" "+backward+": "+multi.Code);
+                if(multi.Snapshot.SelectedText.Replace("\r\n","\n").TrimEnd('\n')!=full)
+                    throw new Exception("Obsidian multi-paragraph selection incomplete: chars="+multi.Snapshot.SelectedText.Length);
+                await SelectionTests.Verify(broker,multi.Snapshot,multi.Snapshot.SelectedText);
+                if(File.ReadAllText(note).Replace("\r\n","\n")!=full)throw new Exception("Multi-paragraph copy changed Markdown");
+                Console.WriteLine("PASS real Obsidian "+mode+" multi-paragraph "+(backward?"backward":"forward")+" selection and clipboard");
+            }
         }
         finally{if(!process.HasExited)process.Kill(true);await broker.CallAsync(new("clear"),default);}
     }

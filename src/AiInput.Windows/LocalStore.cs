@@ -59,7 +59,7 @@ public static class LocalStore
     }
     public static void DeleteKey(){string p=Path.Combine(Root,"key.bin");if(File.Exists(p))File.Delete(p);}
     static readonly object Sync=new();
-    public static void Log(string code,Exception? error=null)
+    public static void Log(string code,Exception? error=null,string? mode=null,int? beforeChars=null,int? afterChars=null,int? selectionChars=null)
     {
         lock(Sync)try
         {
@@ -70,7 +70,7 @@ public static class LocalStore
                 for(int i=4;i>=1;i--){string from=i==1?file:file+"."+(i-1);if(File.Exists(from))File.Move(from,file+"."+i,true);}
             }
             File.AppendAllText(file,JsonSerializer.Serialize(new{time=DateTimeOffset.UtcNow,version=AiInput.Core.ProductInfo.VersionText,code,
-                errorType=error?.GetType().Name,hresult=error?.HResult})+Environment.NewLine);
+                mode,beforeChars,afterChars,selectionChars,errorType=error?.GetType().Name,hresult=error?.HResult})+Environment.NewLine);
         }catch{}
     }
     public static void Export(string destination,Settings settings)

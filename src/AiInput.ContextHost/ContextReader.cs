@@ -36,7 +36,14 @@ public sealed class ContextReader : IDisposable
     {
         Clear();
         ChromiumAccessibility.Wake(Native.GetForegroundWindow());
+        nint foreground=Native.GetForegroundWindow();
         var result=Read(true);
+        for(int attempt=0;attempt<2&&!result.Ok&&(result.Code is "ContextUnavailable" or "TextPatternUnavailable" or "NoFocus" or "TargetChanged");attempt++)
+        {
+            Thread.Sleep(120);
+            if(Native.GetForegroundWindow()!=foreground)break;
+            Clear();result=Read(true);
+        }
         if(!result.Ok)return new(false,result.Code);
         snapshot=result;
         return new(true,"Ready",result);
@@ -142,7 +149,7 @@ public sealed class ContextReader : IDisposable
             try{return ReadUia(attach);}
             catch(InvalidOperationException e) when(e.Message is not ("ProtectedOrUnknown" or "Composing" or "SelectionTooLarge" or "SelectionUnsupported"))
             {
-                if(attach)LocalStore.Log("UiaLookupUnavailable");
+                if(attach)LocalStore.Log("UiaLookup_"+DiagnosticCode(e.Message));
                 return ReadAccessible(attach);
             }
             catch(COMException)
@@ -154,12 +161,15 @@ public sealed class ContextReader : IDisposable
         catch(InvalidOperationException ex)
         {
             string code=ex.Message;
-            if(attach)LocalStore.Log(code is "Composing" or "ProtectedOrUnknown" or "ReadOnlyOrUnknown" or "SelectionTooLarge" or "SelectionUnsupported" ? code : "ContextUnavailable");
+            if(attach)LocalStore.Log(DiagnosticCode(code));
             return new(){Code=code is "Composing" or "CompositionUnsupported" or "ProtectedOrUnknown" or
-                "ReadOnlyOrUnknown" or "SelectionTooLarge" or "SelectionUnsupported" or "TextPatternUnavailable" or "NoTarget" ? code:"ContextUnavailable"};
+                "ReadOnlyOrUnknown" or "SelectionTooLarge" or "SelectionUnsupported" or "TextPatternUnavailable" or "NoTarget" or "NoFocus" or "TargetChanged" ? code:"ContextUnavailable"};
         }
         catch(Exception error){if(attach)LocalStore.Log("ContextProviderFailed",error);return new(){Code="ContextUnavailable"};}
     }
+    static string DiagnosticCode(string code)=>code is "Composing" or "ProtectedOrUnknown" or "ReadOnlyOrUnknown" or
+        "SelectionTooLarge" or "SelectionUnsupported" or "TextPatternUnavailable" or "NoTarget" or "NoFocus" or
+        "InactiveCaret" or "TargetChanged" or "DesktopUnavailable" ? code : "ContextUnavailable";
     ContextSnapshot ReadAccessible(bool attach)
     {
         nint hwnd=Native.GetForegroundWindow();

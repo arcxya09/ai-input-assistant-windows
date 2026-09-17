@@ -23,7 +23,9 @@ internal static class CompletionTests
         Reject("```json\n"+Json("ok","正文。")+"\n```","InvalidCompletionFormat","wrapped model output rejected");
         Reject("{\"status\":\"ok\",\"text\":\"未完成", "InvalidCompletionFormat","broken JSON rejected");
         Reject(Json("unknown","正文。"),"InvalidCompletionFormat","unknown model status rejected");
-        Reject("{\"status\":\"ok\",\"text\":\"正文。\",\"reason\":\"说明\"}","InvalidCompletionFormat","extra fields rejected");
+        Check(CompletionOutput.Parse(new("{\"status\":\"ok\",\"text\":\"正文。\",\"reason\":\"不得展示\"}","stop")).Text=="正文。","extra metadata ignored without exposing it");
+        Reject("{\"status\":\"cannot_continue\",\"status\":\"ok\",\"text\":\"错误正文\"}","InvalidCompletionFormat","duplicate status rejected");
+        Reject("{\"status\":\"ok\",\"text\":\"正文\",\"text\":\"错误正文\"}","InvalidCompletionFormat","duplicate text rejected");
         Reject(Json("ok",""),"NoContinuation","empty successful result becomes status");
         Reject(Json("ok","抱歉，我无法续写这段内容。"),"CannotContinue","apology mislabeled as success rejected");
         Reject(Json("ok","As an AI, I cannot continue this text."),"CannotContinue","English refusal mislabeled as success rejected");
@@ -37,6 +39,21 @@ internal static class CompletionTests
             var gate=new GenerationGate();
             try{var result=await client.GenerateAsync("test-placeholder",new(){Ok=true,SelectedText="选区"},null,default);gate.Offer(gate.Revision,result.Text);throw new Exception("Failure offered");}
             catch(ProviderException e){Check(e.Code=="CannotContinue"&&gate.Suggestion==null,"model failure never reaches suggestion acceptance pipeline");}
+        }
+        foreach(string calls in new[]{"null","[]","[{\"index\":0,\"function\":{\"name\":\"unexpected\"}}]","{}"})
+        {
+            string payload=Json("ok","正常完整的续写。");
+            string frame(string delta,string finish="null")=>"data: {\"error\":null,\"choices\":[{\"index\":0,\"delta\":"+delta+",\"finish_reason\":"+finish+"}]}\n\n";
+            string sse=frame("{\"role\":\"assistant\",\"content\":null,\"tool_calls\":"+calls+"}")+
+                string.Concat(payload.Chunk(5).Select(part=>frame(JsonSerializer.Serialize(new{content=new string(part),tool_calls=(object?)null}))))+
+                frame("null","\"stop\"")+"data: {\"choices\":[],\"usage\":{}}\n\ndata: [DONE]\n\n";
+            using var stream=new MemoryStream(Encoding.UTF8.GetBytes(sse));
+            try
+            {
+                var result=CompletionOutput.Parse(await CompletionClient.ReadSseAsync(stream,default));
+                Check((calls=="null"||calls=="[]")&&result.Text=="正常完整的续写。","fragmented SSE accepts absent tool calls: "+calls);
+            }
+            catch(ProviderException e){Check(calls!="null"&&calls!="[]"&&e.Code=="UnexpectedToolCall","actual or malformed tool call remains rejected");}
         }
         return count;
     }

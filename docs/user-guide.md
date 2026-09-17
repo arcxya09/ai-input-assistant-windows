@@ -2,7 +2,7 @@
 
 ## 安装与启动
 
-运行 AiInputAssistant-1.3.0-Setup-x64.exe。也可以完整解压 portable ZIP 后运行 AiInputAssistant.exe；不要只复制单个 EXE，主程序需要旁边的运行时、PRI 和 ContextHost 目录。
+运行 AiInputAssistant-1.3.1-Setup-x64.exe。也可以完整解压 portable ZIP 后运行 AiInputAssistant.exe；不要只复制单个 EXE，主程序需要旁边的运行时、PRI 和 ContextHost 目录。
 
 面向 Windows 10 1809+ / Windows 11 x64。安装程序按当前用户安装，应用不要求管理员权限。安装包尚无数字签名。
 

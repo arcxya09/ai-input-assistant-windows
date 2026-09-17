@@ -1,0 +1,39 @@
+# .NET / Visual Studio
+[Bb]in/
+[Oo]bj/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+artifacts/
+publish/
+packages/
+AppPackages/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+*.pfx
+*.p12
+*.key
+
+# User data and diagnostics
+logs/
+*.log
+screenshots/
+captures/
+userdata/
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+Desktop.ini

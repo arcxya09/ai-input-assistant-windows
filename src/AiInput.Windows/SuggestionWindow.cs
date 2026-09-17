@@ -34,6 +34,16 @@ public sealed class SuggestionWindow : Form
         menu.Items.Add("退出",null,(_,_)=>ExitRequested?.Invoke());
         ContextMenuStrip=menu;
     }
+    public bool IsDisplayed=>IsHandleCreated&&Native.IsWindowVisible(Handle);
+    void ShowOverlay()
+    {
+        // Showing the first WinForms form in a WinUI process can activate it.
+        // Keep the HWND lifecycle, but show only through SWP_NOACTIVATE.
+        if(!IsHandleCreated)CreateHandle();
+        if(!Native.SetWindowPos(Handle,-1,Left,Top,Width,Height,0x0010|0x0040))
+            throw new InvalidOperationException("OverlayShowFailed");
+    }
+    void HideOverlay(){if(IsHandleCreated)Native.ShowWindow(Handle,0);}
     protected override bool ShowWithoutActivation=>true;
     protected override CreateParams CreateParams
     {
@@ -78,17 +88,15 @@ public sealed class SuggestionWindow : Form
     {
         if(!enabled)return;
         text=value;scroll=0;copyMode=copy;
-        SetDisplaySize();EnsureVisible();Render();Show();
-        Native.SetWindowPos(Handle,-1,Left,Top,Width,Height,0x0010|0x0040);
+        SetDisplaySize();EnsureVisible();Render();ShowOverlay();
     }
-    public void Conceal(){text="";scroll=0;copyMode=false;SetDisplaySize();EnsureVisible();if(Visible)Render();}
+    public void Conceal(){text="";scroll=0;copyMode=false;SetDisplaySize();EnsureVisible();if(IsDisplayed)Render();}
     public void SetStatus(string value,bool active,bool busy)
     {
         status=value;statusItem.Text=value;enabled=active;working=busy&&value.Contains("正在");
-        if(!active){text="";scroll=0;copyMode=false;Hide();return;}
+        if(!active){text="";scroll=0;copyMode=false;HideOverlay();return;}
         SetDisplaySize();EnsureVisible();Render();
-        if(!Visible)Show();
-        Native.SetWindowPos(Handle,-1,Left,Top,Width,Height,0x0010|0x0040);
+        ShowOverlay();
     }
     void SetDisplaySize()
     {
@@ -120,7 +128,7 @@ public sealed class SuggestionWindow : Form
         finally{resizing=false;}
     }
     static StringFormat TextFormat()=>new(StringFormat.GenericTypographic){FormatFlags=StringFormatFlags.MeasureTrailingSpaces};
-    public void RefreshStyle(){SetDisplaySize();EnsureVisible();if(Visible)Render();}
+    public void RefreshStyle(){SetDisplaySize();EnsureVisible();if(IsDisplayed)Render();}
     void EnsureVisible()
     {
         var area=Screen.FromRectangle(Bounds).WorkingArea;
@@ -158,7 +166,7 @@ public sealed class SuggestionWindow : Form
         if(m.Msg==0x02E0){base.WndProc(ref m);SetDisplaySize();EnsureVisible();Render();return;}
         base.WndProc(ref m);
     }
-    protected override void OnResize(EventArgs e){base.OnResize(e);if(IsHandleCreated&&Visible)Render();}
+    protected override void OnResize(EventArgs e){base.OnResize(e);if(IsHandleCreated&&IsDisplayed)Render();}
     Bitmap RenderFrame()
     {
         int sample=(long)Width*Height<=2_000_000?2:1;
@@ -234,16 +242,22 @@ public sealed class SuggestionWindow : Form
         string previousStatus=status,previousText=text;
         bool previousEnabled=enabled,previousWorking=working;
         nint foreground=Native.GetForegroundWindow();
+        void CheckFocus(string stage)
+        {
+            nint now=Native.GetForegroundWindow();
+            if(now!=foreground)throw new InvalidOperationException("CapsuleFocus_"+stage+"_"+(now==Handle?"Overlay":"OtherWindow"));
+        }
         try
         {
             Conceal();SetStatus("已暂停",false,false);
-            if(Visible)throw new InvalidOperationException("PausedCapsuleVisible");
+            if(IsDisplayed)throw new InvalidOperationException("PausedCapsuleVisible");
             Present("不得显示过期建议");RefreshStyle();
-            if(Visible||text.Length!=0)throw new InvalidOperationException("PausedSuggestionResurrected");
+            if(IsDisplayed||text.Length!=0)throw new InvalidOperationException("PausedSuggestionResurrected");
             SetStatus("已启用",true,false);int compact=Width;
-            if(!Visible||Height!=CapsuleHeight||Width>CapsuleMaxWidth)throw new InvalidOperationException("CapsuleNotCompact");
+            if(!IsDisplayed||Height!=CapsuleHeight||Width>CapsuleMaxWidth)throw new InvalidOperationException("CapsuleNotCompact");
             SetStatus("已识别 300 字 · 正在续写…",true,true);
             if(Width<=compact||Width>CapsuleMaxWidth)throw new InvalidOperationException("CapsuleNotAdaptive");
+            CheckFocus("Show");
             using(var frame=RenderFrame())
             {
                 // Text must contain blended edge coverage, not just binary pixels.
@@ -257,7 +271,7 @@ public sealed class SuggestionWindow : Form
             if(contentHeight<=BodyHeight)throw new InvalidOperationException("LongPreviewMissing");
             ScrollBy(contentHeight);
             if(scroll<=0||Math.Abs(scroll-(contentHeight-BodyHeight))>1||text!=paragraph)throw new InvalidOperationException("PreviewScrollFailed");
-            if(Native.GetForegroundWindow()!=foreground)throw new InvalidOperationException("CapsuleStoleFocus");
+            CheckFocus("Preview");
             Conceal();SetStatus("已启用",true,false);
             if(Width!=compact)throw new InvalidOperationException("CapsuleDidNotShrink");
             double oldSize=settings.FontSize;
@@ -273,9 +287,11 @@ public sealed class SuggestionWindow : Form
                 }
             }
             finally{settings.FontSize=oldSize;Conceal();SetStatus("已启用",true,false);}
+            CheckFocus("FontSizes");
             if(previewPath!=null)SavePreview(previewPath);
+            CheckFocus("StatusChanges");
             SetStatus("已暂停",false,false);
-            if(Visible)throw new InvalidOperationException("PauseDidNotHide");
+            if(IsDisplayed)throw new InvalidOperationException("PauseDidNotHide");
         }
         finally
         {

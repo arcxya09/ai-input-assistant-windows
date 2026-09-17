@@ -261,19 +261,23 @@ public sealed class Controller : IDisposable
     public async Task SmokeAsync()
     {
         var reply=await broker.CallAsync(new("ping"),CancellationToken.None);
-        if(!reply.Ok||window==null||!monitor.HooksAvailable||overlay.Visible)throw new InvalidOperationException("SmokeFailed");
+        if(!reply.Ok||window==null||!monitor.HooksAvailable||overlay.IsDisplayed)throw new InvalidOperationException("SmokeFailed");
         // Exercise the actual title-bar close path. Window.Close() explicitly
         // destroys a WinUI window and bypasses cancellable AppWindow.Closing.
         Native.PostMessage(WinRT.Interop.WindowNative.GetWindowHandle(window),0x112,0xF060,0);
         for(int i=0;i<20&&window!=null&&window.AppWindow.IsVisible;i++)await Task.Delay(100);
-        if(window==null||window.AppWindow.IsVisible||window.AppWindow.IsShownInSwitchers||overlay.Visible||!tray.Visible||disposed)
+        if(window==null||window.AppWindow.IsVisible||window.AppWindow.IsShownInSwitchers||overlay.IsDisplayed||!tray.Visible||disposed)
             throw new InvalidOperationException("BackgroundHideFailed");
         OpenSettings();
         await Task.Delay(300);
         if(!window.AppWindow.IsVisible||!window.AppWindow.IsShownInSwitchers)
             throw new InvalidOperationException("BackgroundRestoreFailed");
+        nint settingsHandle=WinRT.Interop.WindowNative.GetWindowHandle(window);
+        Native.SetForegroundWindow(settingsHandle);
+        for(int i=0;i<10&&Native.GetForegroundWindow()!=settingsHandle;i++)await Task.Delay(50);
+        if(Native.GetForegroundWindow()!=settingsHandle)throw new InvalidOperationException("SmokeFocusSetupFailed");
         overlay.VerifyDisplay(Program.SmokePath==null?null:Program.SmokePath+".png");
-        if(overlay.Visible)throw new InvalidOperationException("SmokeLeftPausedOverlayVisible");
+        if(overlay.IsDisplayed)throw new InvalidOperationException("SmokeLeftPausedOverlayVisible");
         var legacy=System.Text.Json.JsonSerializer.Deserialize<Settings>("{\"Schema\":1,\"FontSize\":19}")!;
         if(legacy.ThinkingDepth!="auto"||legacy.FontSize!=19)throw new InvalidOperationException("ThinkingMigrationFailed");
         foreach(string depth in new[]{"auto","max","none"})

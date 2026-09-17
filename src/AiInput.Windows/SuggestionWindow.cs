@@ -52,6 +52,9 @@ public sealed class SuggestionWindow : Form
             if(status.StartsWith("选区续写"))return "选区续写就绪";
             if(status.StartsWith("已复制"))return "已复制";
             if(status.StartsWith("上下文不足"))return "上下文不足";
+            if(status.StartsWith("已读取文字，但模型"))return "模型未能续写";
+            if(status.StartsWith("未能稳定读取"))return "光标或选区未就绪";
+            if(status.StartsWith("已识别空输入框"))return "等待文字";
             if(status.StartsWith("本次无法续写"))return "暂无法续写";
             if(status.StartsWith("本次没有生成"))return "暂无续写";
             if(status.StartsWith("续写返回异常"))return "续写返回异常";

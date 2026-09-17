@@ -150,7 +150,7 @@ public sealed class Controller : IDisposable
                 var valid=await broker.CallAsync(new("probe",captured.Token),cancel.Token);
                 if(gate.IsCurrent(rev)&&!valid.Ok)Activity();
             }
-            if(gate.Enabled&&!generating&&context==null&&DateTime.UtcNow>=due&&DateTime.UtcNow>=cooldown)
+            if(gate.Enabled&&!generating&&context==null&&DateTime.UtcNow>=due&&DateTime.UtcNow>=cooldown&&Native.KeysReleased()&&(Native.GetAsyncKeyState(1)&0x8000)==0)
             {
                 due=DateTime.MaxValue;
                 await GenerateAsync(false);
@@ -179,22 +179,22 @@ public sealed class Controller : IDisposable
             if(!capture.Ok||capture.Snapshot==null){SetStatus(Explain(capture.Code));return;}
             context=capture.Snapshot;
             var target=context;
-            if(screenshot)
+            if(screenshot&&!target.IsSelection)
             {
                 overlay.Conceal();
                 await Task.Delay(80,ct);
                 if(!gate.IsCurrent(revision))return;
                 image=ScreenCapture.Capture((nint)target.Window);
             }
-            SetStatus(screenshot?"已识别输入框 · 正在根据截图续写…":$"已识别 {target.Before.Length+target.After.Length} 字 · 正在续写…");
+            SetStatus(target.IsSelection?$"已选中 {target.SelectedText.Length} 字 · 正在续写…":screenshot?"已识别输入框 · 正在根据截图续写…":$"已识别 {target.Before.Length+target.After.Length} 字 · 正在续写…");
             var result=await client.GenerateAsync(key,target,image,ct);
             image=null; // Request content owns and clears the image.
             if(!gate.IsCurrent(revision))return;
             var valid=await broker.CallAsync(new("probe",target.Token),ct);
             if(!gate.IsCurrent(revision)||!valid.Ok){Invalidate();return;}
-            string? text=TextPolicy.Accept(result,target.Before,target.After);
+            string? text=TextPolicy.Accept(result,target.IsSelection?target.SelectedText:target.Before,target.IsSelection?"":target.After);
             if(text==null){context=null;SetStatus("本次没有合适的续写，继续输入后再试");return;}
-            if(gate.Offer(revision,text)){overlay.Present(text);SetStatus("建议已就绪，按采纳快捷键插入");}
+            if(gate.Offer(revision,text)){overlay.Present(text,target.IsSelection);SetStatus(target.IsSelection?"选区续写就绪，按采纳快捷键复制":"建议已就绪，按采纳快捷键插入");}
         }
         catch(OperationCanceledException)
         {
@@ -228,13 +228,17 @@ public sealed class Controller : IDisposable
             var ct=cancel.Token;
             for(int i=0;i<20&&!Native.KeysReleased();i++)await Task.Delay(50,ct);
             if(!Native.KeysReleased()||!gate.IsCurrent(revision)){Invalidate();return;}
-            var reply=await broker.CallAsync(new("insert",target.Token,text),ct);
+            var reply=await SuggestionActions.AcceptAsync(broker,target,text,ct);
             if(!gate.IsCurrent(revision))return;
+            if(reply.Code=="ClipboardBusy")
+            {
+                gate.Offer(revision,text);overlay.Present(text,true);SetStatus("剪贴板暂被占用，按采纳快捷键重试复制");return;
+            }
             Invalidate();
             if(reply.Ok)
             {
-                SetStatus("已插入");
-                if(gate.Enabled)due=DateTime.UtcNow.AddMilliseconds(150);
+                SetStatus(target.IsSelection?"已复制续写，可粘贴到需要的位置":"已插入");
+                due=!target.IsSelection&&gate.Enabled?DateTime.UtcNow.AddMilliseconds(150):DateTime.MaxValue;
             }
             else
             {
@@ -243,7 +247,7 @@ public sealed class Controller : IDisposable
             }
         }
         catch(OperationCanceledException){Pause("插入已取消，未自动重试");}
-        catch(Exception e){LocalStore.Log("InsertUncertain",e);Pause("插入结果未确认，已暂停以避免重复");}
+        catch(Exception e){LocalStore.Log(target.IsSelection?"ClipboardFailed":"InsertUncertain",e);Pause(target.IsSelection?"复制失败，请重新生成后再试":"插入结果未确认，已暂停以避免重复");}
         finally{inserting=false;}
     }
     public void SaveSettings()
@@ -278,7 +282,8 @@ public sealed class Controller : IDisposable
         "CompositionUnsupported"=>"当前控件无法可靠检测中文组合输入",
         "ProtectedOrUnknown"=>"当前为密码框或无法确认输入类型",
         "ReadOnlyOrUnknown"=>"当前控件不可编辑或无法确认编辑状态",
-        "SelectionNotEmpty"=>"请先取消文字选择，将光标放到插入位置",
+        "SelectionTooLarge"=>"选中文字过长，请缩小选区后再试",
+        "SelectionUnsupported"=>"暂不支持多个选区，请只保留一个连续选区",
         "TextPatternUnavailable"=>"当前应用暂不提供可读取的光标上下文",
         "NoTarget"=>"请将光标放在其他应用的输入框中",
         "ApiKeyInvalid"=>"API Key 无效，请在设置中重新填写",

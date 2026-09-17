@@ -1,18 +1,24 @@
-# AI 输入助手 v1.2
+# AI 输入助手 v1.3
 
 独立 Windows AI 输入助手。WinUI 3 设置界面，DeepSeek 官方文本／图像接口。输入停顿时从光标生成完整续写，用户逐条确认插入。
 
 ## 获取程序
 
-从 [GitHub Release v1.2.0](https://github.com/arcxya09/ai-input-assistant-windows/releases/tag/v1.2.0) 下载：
+从 [GitHub Release v1.3.0](https://github.com/arcxya09/ai-input-assistant-windows/releases/tag/v1.3.0) 下载：
 
-- [安装版 EXE](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.2.0/AiInputAssistant-1.1.0-Setup-x64.exe)：每用户安装程序。
-- [便携版 ZIP](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.2.0/AiInputAssistant-1.1.0-win-x64.zip)：完整解压后运行 `AiInputAssistant.exe`。
-- [SHA256SUMS.txt](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.2.0/SHA256SUMS.txt)：校验值。
+- [安装版 EXE](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.3.0/AiInputAssistant-1.1.0-Setup-x64.exe)：每用户安装程序。
+- [便携版 ZIP](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.3.0/AiInputAssistant-1.1.0-win-x64.zip)：完整解压后运行 `AiInputAssistant.exe`。
+- [SHA256SUMS.txt](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.3.0/SHA256SUMS.txt)：校验值。
 
 程序已包含所需运行时。不要单独复制主程序 EXE；它需要同目录的运行时、PRI 和 ContextHost。
 
-## v1.2 新增
+## v1.3 新增
+
+- 增加 Electron 辅助功能唤醒、更深层的编辑器定位、折叠选区光标回退和 IAccessible2 文本接口，改善 Obsidian 等编辑器的识别。
+- 有选中文字时只根据选区续写，Ctrl+Alt+Enter 复制结果到剪贴板，原文和选区保持不变；不读取选区外内容作为生成上下文，也不附带截图。
+- 支持可读取的只读文本选区。无选区时仍在光标处插入；密码框继续拒绝读取。
+
+## v1.2 改进
 
 - 从光标前后文衔接续写，取消 60 字裁剪，保留英文连接空格；段落完整后才展示。
 - 状态胶囊约 30 DIP 高，宽度随状态调整；长建议自动展开，支持滚轮和右键翻页。
@@ -35,13 +41,13 @@
 - 启动、解锁和恢复后暂停；排除密码输入目标。
 - 浮窗位置、尺寸、字号、背景透明度及快捷键可保存。
 - 密钥用 Windows 当前用户保护机制加密；诊断日志不含正文和截图。
-- 不改写系统剪贴板；上下文访问在独立进程中运行。
+- 普通光标模式不改写剪贴板；选区模式仅在采纳时写入续写结果。上下文访问在独立进程中运行。
 
 | 默认快捷键 | 功能 |
 | --- | --- |
 | Ctrl+Alt+Space | 启用／暂停 |
 | Ctrl+Alt+S | 截图并单次生成 |
-| Ctrl+Alt+Enter | 采纳当前建议 |
+| Ctrl+Alt+Enter | 插入建议／复制选区续写 |
 
 ## 兼容性边界
 
@@ -70,6 +76,6 @@ Windows 上安装 .NET SDK 10.0.401、Windows SDK 和 Inno Setup 6，运行：
 - [开发路线](docs/roadmap.md)
 - [第三方组件](THIRD-PARTY-NOTICES.md)
 
-v1.0 未包含更新器，需手动安装一次 v1.2；此后可使用程序内更新。便携版通过更新器安装后仍在原目录运行，并增加卸载程序。
+v1.0 未包含更新器，需手动安装一次新版；此后可使用程序内更新。便携版通过更新器安装后仍在原目录运行，并增加卸载程序。
 
 项目自身许可证尚未选定。

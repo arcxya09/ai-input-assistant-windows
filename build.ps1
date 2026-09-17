@@ -9,6 +9,7 @@ Run-Dotnet publish src/AiInput.App/AiInput.App.csproj -c $Configuration -r win-x
 Run-Dotnet publish src/AiInput.ContextHost/AiInput.ContextHost.csproj -c $Configuration -r win-x64 --self-contained true -o artifacts/app/ContextHost
 Run-Dotnet publish src/AiInput.UpdateHost/AiInput.UpdateHost.csproj -c $Configuration -r win-x64 --self-contained true -o artifacts/app/Updater
 Run-Dotnet publish tests/AiInput.Windows.Tests/AiInput.Windows.Tests.csproj -c $Configuration -r win-x64 --self-contained true -o artifacts/tests
+& ./tests/Prepare-Obsidian.ps1
 & artifacts/tests/AiInput.Windows.Tests.exe (Resolve-Path artifacts/app).Path
 if ($LASTEXITCODE -ne 0) { throw "Windows integration tests failed" }
 Copy-Item README.md,THIRD-PARTY-NOTICES.md artifacts/app/

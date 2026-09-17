@@ -9,7 +9,7 @@ public sealed class SuggestionWindow : Form
     readonly Settings settings;
     readonly ToolStripMenuItem statusItem=new(){Enabled=false};
     string text="",status="已暂停";
-    bool enabled,working,resizing;
+    bool enabled,working,resizing,copyMode;
     float scroll,contentHeight;
     public event Action? BoundsSaved;
     public event Action? OpenSettingsRequested;
@@ -48,6 +48,9 @@ public sealed class SuggestionWindow : Form
             if(status.StartsWith("已暂停")||status.Contains("当前暂停"))return "已暂停";
             if(status.StartsWith("已启用"))return "等待输入";
             if(status.StartsWith("正在识别"))return "识别输入框…";
+            if(status.StartsWith("已选中"))return status.Replace(" · 正在续写…"," · 续写中…");
+            if(status.StartsWith("选区续写"))return "选区续写就绪";
+            if(status.StartsWith("已复制"))return "已复制";
             if(status.StartsWith("已识别"))return status.Contains("截图")?"截图续写中…":status.Replace(" · 正在续写…"," · 续写中…");
             if(status.StartsWith("建议已就绪"))return "续写已就绪";
             if(status.Contains("候选词"))return "等待选词";
@@ -58,13 +61,13 @@ public sealed class SuggestionWindow : Form
             return status;
         }
     }
-    public void Present(string value)
+    public void Present(string value,bool copy=false)
     {
-        text=value;scroll=0;
+        text=value;scroll=0;copyMode=copy;
         SetDisplaySize();EnsureVisible();Render();Show();
         Native.SetWindowPos(Handle,-1,Left,Top,Width,Height,0x0010|0x0040);
     }
-    public void Conceal(){text="";scroll=0;SetDisplaySize();EnsureVisible();if(Visible)Render();}
+    public void Conceal(){text="";scroll=0;copyMode=false;SetDisplaySize();EnsureVisible();if(Visible)Render();}
     public void SetStatus(string value,bool active,bool busy)
     {
         status=value;statusItem.Text=value;enabled=active;working=busy&&value.Contains("正在");
@@ -178,7 +181,7 @@ public sealed class SuggestionWindow : Form
                 g.DrawString(text,font,white,new RectangleF(18*scale,16*scale-scroll,Width-36*scale,contentHeight),format);
                 g.Restore(state);
                 string paging=contentHeight>BodyHeight?$"滚轮 / 右键翻页 · {Math.Min(100,(int)Math.Ceiling((scroll+BodyHeight)/contentHeight*100))}%":"双击打开设置 · 右键菜单";
-                g.DrawString("Ctrl+Alt+"+KeyName(settings.AcceptKey)+" 采纳完整内容",small,muted,new RectangleF(18*scale,Height-48*scale,Width-36*scale,20*scale));
+                g.DrawString("Ctrl+Alt+"+KeyName(settings.AcceptKey)+(copyMode?" 复制续写到剪贴板":" 采纳完整内容"),small,muted,new RectangleF(18*scale,Height-48*scale,Width-36*scale,20*scale));
                 g.DrawString(paging,small,muted,new RectangleF(18*scale,Height-28*scale,Width-36*scale,20*scale));
                 g.DrawLine(Pens.SlateGray,Width-15,Height-7,Width-7,Height-15);
             }

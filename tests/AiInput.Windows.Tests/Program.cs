@@ -21,9 +21,9 @@ static class Program
             edit.MaxLength=1100000;
             edit.Text=kind=="empty"?"":kind=="long"?new string('前',70000)+"后文":"前文后文";edit.Dock=DockStyle.Fill;
             if(kind=="password"&&edit is TextBox password){password.Multiline=false;password.UseSystemPasswordChar=true;}
-            if(kind=="readonly")edit.ReadOnly=true;
+            if(kind is "readonly" or "readonlyselection")edit.ReadOnly=true;
             form.Controls.Add(edit);
-            form.Shown+=(_,_)=>{edit.Focus();edit.SelectionStart=kind=="empty"?0:kind=="long"?70000:2;edit.SelectionLength=kind=="selection"?2:0;};
+            form.Shown+=(_,_)=>{edit.Focus();edit.SelectionStart=kind=="empty"?0:kind=="long"?70000:2;edit.SelectionLength=kind is "selection" or "readonlyselection"?2:0;};
             Application.Run(form);return 0;
         }
         try{return Run(args[0]).GetAwaiter().GetResult();}
@@ -83,7 +83,7 @@ static class Program
             }
             finally{password.Kill(true);}
         }
-        foreach(string kind in new[]{"readonly","selection"})
+        foreach(string kind in new[]{"readonly"})
         {
             using var target=await Target(kind);
             try
@@ -91,6 +91,23 @@ static class Program
                 var result=await broker.CallAsync(new("capture"),default);
                 if(result.Ok||result.Snapshot!=null)throw new Exception(kind+" target accepted");
                 Console.WriteLine("PASS "+kind+" target rejected");
+            }
+            finally{target.Kill(true);}
+        }
+        foreach(string kind in new[]{"selection","readonlyselection"})
+        {
+            using var target=await Target(kind);
+            try
+            {
+                var capture=await broker.CallAsync(new("capture"),default);
+                if(!capture.Ok||capture.Snapshot==null)throw new Exception(kind+" capture: "+capture.Code);
+                await SelectionTests.Verify(broker,capture.Snapshot,"后文");
+                uint thread=Native.GetWindowThreadProcessId(target.MainWindowHandle,out _);
+                var info=new Native.GUITHREADINFO{Size=(uint)Marshal.SizeOf<Native.GUITHREADINFO>()};Native.GetGUIThreadInfo(thread,ref info);
+                Native.SendMessageTimeout(info.Focus,0xB1,0,2,2,200,out _);
+                var stale=await SuggestionActions.AcceptAsync(broker,capture.Snapshot,"STALE",default);
+                if(stale.Ok||SelectionTests.ReadClipboard()!="完整续写结果，可以自行粘贴。")throw new Exception("Changed selection copied stale result");
+                Console.WriteLine("PASS "+kind+" selection-only snapshot, copy, source preservation and stale selection rejection");
             }
             finally{target.Kill(true);}
         }
@@ -118,6 +135,7 @@ static class Program
             finally{target.Kill(true);}
         }
         try{await BrowserTests.Run(broker);}catch(Exception e){Console.WriteLine("FAIL "+e.Message);failures++;}
+        try{await ObsidianTests.Run(broker);}catch(Exception e){Console.WriteLine("FAIL "+e.Message);failures++;}
         if(failures>0)throw new Exception(failures+" compatibility test group(s) failed");
         return 0;
     }

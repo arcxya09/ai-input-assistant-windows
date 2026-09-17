@@ -44,7 +44,7 @@ public sealed class InputMonitor : Form
     }
     nint Mouse(int code,nint wp,nint lp)
     {
-        if(code>=0&&Watching?.Invoke()==true&&(wp==0x201||wp==0x204||wp==0x20A))
+        if(code>=0&&Watching?.Invoke()==true&&(wp==0x201||wp==0x202||wp==0x204||wp==0x20A))
         {
             var data=Marshal.PtrToStructure<Native.MOUSEHOOK>(lp);
             if(IsOwnWindow?.Invoke(Native.WindowFromPoint(data.Point))!=true)Activity?.Invoke();

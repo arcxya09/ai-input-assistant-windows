@@ -6,7 +6,7 @@ using AiInput.Windows;
 
 namespace AiInput.ContextHost;
 
-internal sealed record NativeEditState(nint Handle, int Position, string Fingerprint, string Before, string After);
+internal sealed record NativeEditState(nint Handle, int Position, int End, string Fingerprint, string Before, string After, string SelectedText);
 
 internal static class NativeEditReader
 {
@@ -40,14 +40,15 @@ internal static class NativeEditReader
         if (!edit && !rich) return null;
         long style = (long)Native.GetWindowLongPtr(hwnd, -16);
         if ((style & 0x20) != 0) throw new InvalidOperationException("ProtectedOrUnknown");
-        if ((style & 0x800) != 0 || (style & 0x08000000) != 0) throw new InvalidOperationException("ReadOnlyOrUnknown");
+        if ((style & 0x08000000) != 0) throw new InvalidOperationException("ReadOnlyOrUnknown");
         if (IsComposing(hwnd)) throw new InvalidOperationException("Composing");
         if (Native.SendMessageTimeout(hwnd, 0xE6, 0, 0, 2, 200, out nuint password) == 0) throw new InvalidOperationException("ContextUnavailable");
         if (password != 0) throw new InvalidOperationException("ProtectedOrUnknown");
         if (Native.SendMessageTimeout(hwnd, 0xE, 0, 0, 2, 200, out nuint length) == 0 || length > 1024 * 1024) throw new InvalidOperationException("ContextUnavailable");
         int start = 0, end = 0;
         if (Native.SendSelectionMessageTimeout(hwnd, 0xB0, ref start, ref end, 2, 200, out _) == 0) throw new InvalidOperationException("ContextUnavailable");
-        if (start != end) throw new InvalidOperationException("SelectionNotEmpty");
+        if(start==end&&(style&0x800)!=0)throw new InvalidOperationException("ReadOnlyOrUnknown");
+        if(end-start>TextPolicy.MaxSelectionChars)throw new InvalidOperationException("SelectionTooLarge");
         var buffer = new StringBuilder((int)length + 1);
         if (Native.SendTextMessageTimeout(hwnd, 0xD, buffer.Capacity, buffer, 2, 200, out _) == 0) throw new InvalidOperationException("ContextUnavailable");
         string text = buffer.ToString();
@@ -56,8 +57,11 @@ internal static class NativeEditReader
         if (rich && text.Contains("\r\n")) return null;
         int verifyStart = 0, verifyEnd = 0;
         if (Native.SendSelectionMessageTimeout(hwnd, 0xB0, ref verifyStart, ref verifyEnd, 2, 200, out _) == 0 ||
-            start != verifyStart || end != verifyEnd || start < 0 || start > text.Length || Native.GetForegroundWindow() != foreground || FocusWindow(thread) != hwnd)
+            start != verifyStart || end != verifyEnd || start < 0 || end < start || end > text.Length || Native.GetForegroundWindow() != foreground || FocusWindow(thread) != hwnd)
             throw new InvalidOperationException("TargetChanged");
-        return new(hwnd, start, Convert.ToHexString(SHA256.HashData(Encoding.Unicode.GetBytes(text))), TextPolicy.Tail(text[..start], 300), TextPolicy.Head(text[start..], 300));
+        string selected=text[start..end];
+        string fingerprint=Convert.ToHexString(SHA256.HashData(Encoding.Unicode.GetBytes(selected.Length>0?selected:text)));
+        return new(hwnd,start,end,fingerprint,selected.Length>0?"":TextPolicy.Tail(text[..start],300),
+            selected.Length>0?"":TextPolicy.Head(text[end..],300),selected);
     }
 }

@@ -88,5 +88,24 @@ using(var content=new OneShotContent(original,image))
 }
 byte[] cancelled=[7,8,9];new OneShotContent(original,cancelled).Dispose();
 Check(cancelled.All(b=>b==0),"image cleared on cancellation before upload");
+var selectedContext=original with{SelectedText="仅使用这段选中文字。",Before="DO_NOT_SEND_BEFORE",After="DO_NOT_SEND_AFTER"};
+byte[] excludedImage=[9,8,7];
+using(var selectedContent=new OneShotContent(selectedContext,excludedImage))
+{
+    using var memory=new MemoryStream();await selectedContent.CopyToAsync(memory);
+    using var json=JsonDocument.Parse(memory.ToArray());
+    var messages=json.RootElement.GetProperty("messages");
+    Check(messages[0].GetProperty("content").GetString()==CompletionClient.SelectionPrompt,"selection uses dedicated continuation prompt");
+    using var input=JsonDocument.Parse(messages[1].GetProperty("content").GetString()!);
+    Check(input.RootElement.EnumerateObject().Count()==1&&input.RootElement.GetProperty("selection").GetString()==selectedContext.SelectedText,"only selected text sent without before/after context");
+    Check(excludedImage.All(b=>b==0)&&!Encoding.UTF8.GetString(memory.ToArray()).Contains("image_url"),"selection mode excludes and clears screenshot");
+}
+Check(!TextPolicy.InsertionMatches(selectedContext,original,"text"),"selection can never use insertion verification");
+using(var memory=new MemoryStream())
+{
+    var large=original with{Before="",After="",SelectedText=new string('选',TextPolicy.MaxSelectionChars)};
+    await Frames.WriteAsync(memory,new RpcReply(true,"Ready",large),default);memory.Position=0;
+    Check((await Frames.ReadAsync<RpcReply>(memory,default)).Snapshot?.SelectedText==large.SelectedText,"full selection fits IPC without truncation");
+}
 count+=await UpdateTests.Run();
 Console.WriteLine("TOTAL "+count+" PASSED");

@@ -10,6 +10,9 @@ public sealed record ContextSnapshot
     public long Revision { get; init; }
     public string Before { get; init; } = "";
     public string After { get; init; } = "";
+    public string SelectedText { get; init; } = "";
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsSelection => SelectedText.Length > 0;
 }
 public sealed record RpcRequest(string Command, string Token = "", string Text = "");
 public sealed record RpcReply(bool Ok, string Code, ContextSnapshot? Snapshot = null);

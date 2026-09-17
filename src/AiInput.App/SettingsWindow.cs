@@ -52,7 +52,7 @@ public sealed class SettingsWindow : Window
         panel.Children.Add(new TextBlock{Text="快捷键（均为 Ctrl + Alt + 下列按键）",FontSize=18});
         var toggleKey=KeyBox("启用／暂停",controller.Settings.ToggleKey);
         var screenKey=KeyBox("截取当前输入窗口所在显示器",controller.Settings.ScreenshotKey);
-        var acceptKey=KeyBox("采纳当前建议",controller.Settings.AcceptKey);
+        var acceptKey=KeyBox("采纳建议／复制选区续写",controller.Settings.AcceptKey);
         panel.Children.Add(toggleKey);panel.Children.Add(screenKey);panel.Children.Add(acceptKey);
         var appearance=new Button{Content="保存外观与快捷键"};
         appearance.Click+=(_,_)=>{
@@ -68,7 +68,7 @@ public sealed class SettingsWindow : Window
             }
             catch(Exception e){LocalStore.Log("SettingsSaveFailed",e);feedback.Text="设置保存失败";}
         };panel.Children.Add(appearance);
-        panel.Children.Add(new TextBlock{Text="停顿 1.5 秒后生成；前后文各 300 字符；每条建议由你确认。启动和解锁后默认暂停。\n截图快捷键会上传该显示器当前可见画面，仅用于一次生成；正文和截图不写入日志。部分应用无法提供可靠的光标或中文输入法状态，将显示暂不支持。",TextWrapping=TextWrapping.Wrap});
+        panel.Children.Add(new TextBlock{Text="停顿 1.5 秒后生成；无选区时读取光标前后各 300 字符，采纳后原位插入。有选区时只根据选中文字续写，采纳键复制结果到剪贴板，保留原文；不附带截图。选区最多 8192 个 UTF-16 单元，超限会提示缩小选区。每条建议由你确认。启动和解锁后默认暂停。\n截图快捷键会上传该显示器当前可见画面，仅用于一次生成；正文和截图不写入日志。部分应用无法提供可靠的光标或中文输入法状态，将显示暂不支持。",TextWrapping=TextWrapping.Wrap});
         var export=new Button{Content="导出诊断日志"};export.Click+=(_,_)=>{
             using var dialog=new Forms.SaveFileDialog{Filter="ZIP 文件|*.zip",FileName="AiInput-log-"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+".zip",OverwritePrompt=false};
             if(dialog.ShowDialog()==Forms.DialogResult.OK)

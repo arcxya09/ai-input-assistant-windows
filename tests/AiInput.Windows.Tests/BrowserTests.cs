@@ -24,7 +24,7 @@ internal static class BrowserTests
             </html>
             """);
         var start=new ProcessStartInfo(edge){UseShellExecute=false};
-        foreach(string arg in new[]{"--no-first-run","--no-default-browser-check","--force-renderer-accessibility","--user-data-dir="+Path.Combine(root,"profile"),"--app="+new Uri(html).AbsoluteUri})start.ArgumentList.Add(arg);
+        foreach(string arg in new[]{"--no-first-run","--no-default-browser-check","--user-data-dir="+Path.Combine(root,"profile"),"--app="+new Uri(html).AbsoluteUri})start.ArgumentList.Add(arg);
         using var process=Process.Start(start)!;
         try
         {
@@ -67,6 +67,13 @@ internal static class BrowserTests
                     ((IUIAutomationTextPattern)field.GetCurrentPattern(10014)).DocumentRange.GetText(-1);
                 if(!full.Contains("前文"+paragraph+"后文",StringComparison.Ordinal))throw new Exception("Browser full paragraph changed: "+name);
                 Console.WriteLine("PASS browser "+name+" full paragraph at caret and surrounding text preserved");
+                keys.Clear();Key(0x11);Key(0x24);Key(0x24,true);Key(0x11,true);
+                Key(0x10);Key(0x27);Key(0x27,true);Key(0x27);Key(0x27,true);Key(0x10,true);
+                Native.SendInput((uint)keys.Count,keys.ToArray(),Marshal.SizeOf<Native.INPUT>());await Task.Delay(300);
+                var selected=await broker.CallAsync(new("capture"),default);
+                if(!selected.Ok||selected.Snapshot==null)throw new Exception("Browser selection capture "+selected.Code);
+                await SelectionTests.Verify(broker,selected.Snapshot,"前文");
+                Console.WriteLine("PASS browser "+name+" selection-only continuation copy preserves source");
             }
         }
         finally{if(!process.HasExited)process.Kill(true);}

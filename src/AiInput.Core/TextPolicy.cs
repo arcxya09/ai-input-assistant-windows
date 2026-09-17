@@ -5,6 +5,7 @@ public static class TextPolicy
 {
     // Transport/resource safeguard, never a point at which text is cropped.
     public const int MaxInsertionChars = 8192;
+    public const int MaxSelectionChars = 8192;
     public static string Head(string text, int count) => Slice(text, count, false);
     public static string Tail(string text, int count) => Slice(text, count, true);
     static string Slice(string text, int count, bool tail)
@@ -32,6 +33,6 @@ public static class TextPolicy
         return text;
     }
     public static bool InsertionMatches(ContextSnapshot old, ContextSnapshot current, string inserted) =>
-        current.Ok && old.Window == current.Window && old.Process == current.Process &&
+        current.Ok && !old.IsSelection && !current.IsSelection && old.Window == current.Window && old.Process == current.Process &&
         current.Before == Tail(old.Before + inserted, 300) && current.After == old.After;
 }

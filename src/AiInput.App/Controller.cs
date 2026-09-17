@@ -106,7 +106,9 @@ public sealed class Controller : IDisposable
             if(id==2&&!inserting)
             {
                 Invalidate();due=DateTime.MaxValue;
-                await GenerateAsync(true);
+                long shotRevision=gate.Revision;
+                for(int i=0;i<100&&generating&&gate.IsCurrent(shotRevision);i++)await Task.Delay(20);
+                if(gate.IsCurrent(shotRevision)&&!generating)await GenerateAsync(true);
             }
             if(id==3)await AcceptAsync();
         }

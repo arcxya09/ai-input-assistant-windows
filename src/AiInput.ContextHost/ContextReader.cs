@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using AiInput.Core;
 using AiInput.Windows;
-using UIAutomationClient;
+using Interop.UIAutomationClient;
 
 namespace AiInput.ContextHost;
 

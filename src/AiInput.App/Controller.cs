@@ -252,7 +252,9 @@ public sealed class Controller : IDisposable
     {
         var reply=await broker.CallAsync(new("ping"),CancellationToken.None);
         if(!reply.Ok||window==null||!monitor.HooksAvailable||!overlay.Visible)throw new InvalidOperationException("SmokeFailed");
-        window.Close();
+        // Exercise the actual title-bar close path. Window.Close() explicitly
+        // destroys a WinUI window and bypasses cancellable AppWindow.Closing.
+        Native.PostMessage(WinRT.Interop.WindowNative.GetWindowHandle(window),0x112,0xF060,0);
         await Task.Delay(200);
         if(window==null||window.AppWindow.Presenter is not Microsoft.UI.Windowing.OverlappedPresenter presenter||presenter.State!=Microsoft.UI.Windowing.OverlappedPresenterState.Minimized)
             throw new InvalidOperationException("TaskbarPersistenceFailed");

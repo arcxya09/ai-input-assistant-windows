@@ -34,6 +34,7 @@ public static class Native
     [DllImport("user32.dll")] public static extern uint SendInput(uint count, INPUT[] inputs, int size);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(nint hwnd, nint after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] public static extern bool ShowWindow(nint hwnd, int cmd);
+    [DllImport("user32.dll")] public static extern bool PostMessage(nint hwnd,uint message,nint wParam,nint lParam);
     [DllImport("user32.dll")] public static extern bool IsWindow(nint hwnd);
     [DllImport("user32.dll")] public static extern nint OpenInputDesktop(uint flags, bool inherit, uint access);
     [DllImport("user32.dll")] public static extern bool CloseDesktop(nint desktop);

@@ -18,7 +18,12 @@ foreach($item in $required){ if(!(Test-Path "artifacts/app/$item")){throw "Missi
 $smoke=Join-Path (Resolve-Path artifacts) "smoke.txt"
 $process=Start-Process artifacts/app/AiInputAssistant.exe -ArgumentList @("--smoke-ui", $smoke) -PassThru
 if(!$process.WaitForExit(30000)){Stop-Process -Id $process.Id -Force;throw "UI startup timeout"}
-if($process.ExitCode -ne 0 -or !(Test-Path $smoke)){throw "UI startup failed: $($process.ExitCode)"}
+if($process.ExitCode -ne 0 -or !(Test-Path $smoke)){
+    if(Test-Path $smoke){Get-Content $smoke}
+    $events=Join-Path $env:LOCALAPPDATA 'AiInputAssistant/logs/events.log'
+    if(Test-Path $events){Get-Content $events -Tail 8}
+    throw "UI startup failed: $($process.ExitCode)"
+}
 if(!(Get-Content $smoke -Raw).StartsWith("PASS")){throw (Get-Content $smoke -Raw)}
 Compress-Archive -Path artifacts/app/* -DestinationPath "artifacts/AiInputAssistant-$version-win-x64.zip" -Force
 $compiler="C:/Program Files (x86)/Inno Setup 6/ISCC.exe"

@@ -9,7 +9,8 @@ public sealed class Settings
     public int Schema { get; set; }=1;
     public bool AutoUpdate { get; set; }=true;
     public string ThinkingDepth { get; set; }="auto";
-    public double FontSize { get; set; }=16;
+    public int AppearanceVersion { get; set; }=1;
+    public double FontSize { get; set; }=14;
     public double Opacity { get; set; }=.85;
     public int X { get; set; }=120;
     public int Y { get; set; }=120;
@@ -27,14 +28,24 @@ public static class LocalStore
     {
         try
         {
-            var s=JsonSerializer.Deserialize<Settings>(File.ReadAllText(Path.Combine(Root,"settings.json")))??new();
-            if(s.Schema!=1)return new();
-            if(s.ThinkingDepth is not ("auto" or "max" or "none"))s.ThinkingDepth="auto";
-            s.FontSize=Math.Clamp(s.FontSize,12,32);s.Opacity=Math.Clamp(s.Opacity,.25,1);
-            s.Width=Math.Clamp(s.Width,260,1000);s.Height=Math.Clamp(s.Height,110,700);
-            return s;
+            return ParseSettings(File.ReadAllText(Path.Combine(Root,"settings.json")));
         }
         catch{return new();}
+    }
+    public static Settings ParseSettings(string json)
+    {
+        using var document=JsonDocument.Parse(json);
+        var s=JsonSerializer.Deserialize<Settings>(json)??new();
+        if(s.Schema!=1)return new();
+        // Upgrade the previous default once; subsequent choices, including 16,
+        // round-trip unchanged. Other legacy custom font sizes are retained.
+        if(!document.RootElement.TryGetProperty(nameof(Settings.AppearanceVersion),out _)&&s.FontSize==16)s.FontSize=14;
+        s.AppearanceVersion=1;
+        if(s.ThinkingDepth is not ("auto" or "max" or "none"))s.ThinkingDepth="auto";
+        s.FontSize=double.IsFinite(s.FontSize)?Math.Clamp(s.FontSize,12,32):14;
+        s.Opacity=Math.Clamp(s.Opacity,.25,1);
+        s.Width=Math.Clamp(s.Width,260,1000);s.Height=Math.Clamp(s.Height,110,700);
+        return s;
     }
     public static void Save(Settings s)
     {

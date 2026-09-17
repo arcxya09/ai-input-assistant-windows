@@ -280,6 +280,14 @@ public sealed class Controller : IDisposable
         if(overlay.IsDisplayed)throw new InvalidOperationException("SmokeLeftPausedOverlayVisible");
         var legacy=System.Text.Json.JsonSerializer.Deserialize<Settings>("{\"Schema\":1,\"FontSize\":19}")!;
         if(legacy.ThinkingDepth!="auto"||legacy.FontSize!=19)throw new InvalidOperationException("ThinkingMigrationFailed");
+        var previousDefault=LocalStore.ParseSettings("{\"Schema\":1,\"FontSize\":16,\"ThinkingDepth\":\"max\",\"Opacity\":0.7,\"X\":250}");
+        if(previousDefault.FontSize!=14||previousDefault.ThinkingDepth!="max"||previousDefault.Opacity!=.7||previousDefault.X!=250)
+            throw new InvalidOperationException("FontDefaultMigrationFailed");
+        if(LocalStore.ParseSettings("{\"Schema\":1,\"FontSize\":19}").FontSize!=19||LocalStore.ParseSettings("{\"Schema\":1}").FontSize!=14)
+            throw new InvalidOperationException("CustomFontMigrationFailed");
+        previousDefault.FontSize=16;
+        if(LocalStore.ParseSettings(System.Text.Json.JsonSerializer.Serialize(previousDefault)).FontSize!=16)
+            throw new InvalidOperationException("FontChoiceOverwrittenAfterUpgrade");
         foreach(string depth in new[]{"auto","max","none"})
         {
             var restored=System.Text.Json.JsonSerializer.Deserialize<Settings>(System.Text.Json.JsonSerializer.Serialize(new Settings{ThinkingDepth=depth}));

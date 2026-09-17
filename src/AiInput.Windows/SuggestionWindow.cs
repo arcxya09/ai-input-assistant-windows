@@ -1,26 +1,35 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 namespace AiInput.Windows;
 
 public sealed class SuggestionWindow : Form
 {
     readonly Settings settings;
+    readonly Func<nint,uint>? initialDpiQuery;
     readonly ToolStripMenuItem statusItem=new(){Enabled=false};
     string text="",status="已暂停";
     bool enabled,working,resizing,copyMode;
     float scroll,contentHeight;
+    uint windowDpi=96;
+    Size lastRenderedSize;
     public event Action? BoundsSaved;
     public event Action? OpenSettingsRequested;
     public event Action? ToggleRequested;
     public event Action? ExitRequested;
-    public SuggestionWindow(Settings settings)
+    public SuggestionWindow(Settings settings):this(settings,null) { }
+    // The smoke harness substitutes only the monitor DPI query; HWND creation,
+    // layout, rasterization and presentation still use the production path.
+    SuggestionWindow(Settings settings,Func<nint,uint>? initialDpiQuery)
     {
         this.settings=settings;
+        this.initialDpiQuery=initialDpiQuery;
         // Form.TopMost re-applies SetWindowPos without SWP_NOACTIVATE during
         // first handle creation. Apply topmost only through ShowOverlay instead.
         FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;
+        AutoScaleMode=AutoScaleMode.None; // Layered pixels are scaled exactly once below.
         StartPosition=FormStartPosition.Manual;
         MinimumSize=new Size(88,30);
         Bounds=new Rectangle(settings.X,settings.Y,120,30);
@@ -50,7 +59,12 @@ public sealed class SuggestionWindow : Form
     {
         get{var p=base.CreateParams;p.ExStyle|=0x08000000|0x00080000|0x80;return p;}
     }
-    float DpiScale=>IsHandleCreated?Math.Max(1,Native.GetDpiForWindow(Handle)/96f):1;
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        windowDpi=Math.Max(96u,initialDpiQuery?.Invoke(Handle)??Native.GetDpiForWindow(Handle));
+    }
+    float DpiScale=>windowDpi/96f;
     float LabelSize=>(float)Math.Clamp(settings.FontSize,12,32);
     float FooterLine=>Math.Max(20,LabelSize*1.5f)*DpiScale;
     float BottomSpace=>2*FooterLine+16*DpiScale;
@@ -105,6 +119,9 @@ public sealed class SuggestionWindow : Form
         resizing=true;
         try
         {
+            // Create the still-hidden HWND at its saved monitor before measuring
+            // any pixels. Rendering before this used 96 DPI for the first frame.
+            if(enabled&&!IsHandleCreated)CreateHandle();
             float scale=DpiScale;
             MinimumSize=text.Length==0?new Size((int)(88*scale),CapsuleHeight):new Size((int)(280*scale),(int)(120*scale));
             using var bitmap=new Bitmap(1,1);
@@ -164,10 +181,26 @@ public sealed class SuggestionWindow : Form
             m.Result=text.Length>0&&point.X>Width-18*DpiScale&&point.Y>Height-18*DpiScale?17:2;return;
         }
         if(m.Msg==0x0232){SaveBounds();Render();}
-        if(m.Msg==0x02E0){base.WndProc(ref m);SetDisplaySize();EnsureVisible();Render();return;}
+        if(m.Msg==0x02E0)
+        {
+            var suggested=Marshal.PtrToStructure<Native.RECT>(m.LParam);
+            ApplyDpiChange((uint)(m.WParam.ToInt64()&0xFFFF),new Point(suggested.Left,suggested.Top));
+            m.Result=0;return;
+        }
         base.WndProc(ref m);
     }
-    protected override void OnResize(EventArgs e){base.OnResize(e);if(IsHandleCreated&&IsDisplayed)Render();}
+    void ApplyDpiChange(uint dpi,Point suggestedLocation)
+    {
+        windowDpi=Math.Max(96u,dpi);
+        // Own the layered-window layout rather than combining Form's automatic
+        // scaling with our DPI-scaled text. Keep Windows' suggested monitor position.
+        bool wasResizing=resizing;resizing=true;
+        try{Location=suggestedLocation;}
+        finally{resizing=wasResizing;}
+        if(wasResizing)return; // The ongoing layout reads the new DPI before drawing.
+        SetDisplaySize();EnsureVisible();if(IsDisplayed)Render();
+    }
+    protected override void OnResize(EventArgs e){base.OnResize(e);if(!resizing&&IsHandleCreated&&IsDisplayed)Render();}
     Bitmap RenderFrame()
     {
         int sample=(long)Width*Height<=2_000_000?2:1;
@@ -227,7 +260,9 @@ public sealed class SuggestionWindow : Form
     void Render()
     {
         if(!enabled||Width<1||Height<1)return;
+        if(!IsHandleCreated)SetDisplaySize();
         using var bitmap=RenderFrame();
+        lastRenderedSize=bitmap.Size;
         nint screen=Native.GetDC(0),dc=Native.CreateCompatibleDC(screen),hbitmap=bitmap.GetHbitmap(Color.FromArgb(0)),old=Native.SelectObject(dc,hbitmap);
         try
         {
@@ -278,7 +313,7 @@ public sealed class SuggestionWindow : Form
             double oldSize=settings.FontSize;
             try
             {
-                foreach(int size in new[]{12,16,24,32})
+                foreach(int size in new[]{12,14,16,24,32})
                 {
                     settings.FontSize=size;Conceal();SetStatus("已启用",true,false);int height=Height;
                     SetStatus("已选中 120 字 · 正在续写…",true,true);
@@ -289,6 +324,8 @@ public sealed class SuggestionWindow : Form
             }
             finally{settings.FontSize=oldSize;Conceal();SetStatus("已启用",true,false);}
             CheckFocus("FontSizes");
+            VerifyInitialDpi();
+            CheckFocus("DpiChanges");
             if(previewPath!=null)SavePreview(previewPath);
             CheckFocus("StatusChanges");
             SetStatus("已暂停",false,false);
@@ -298,6 +335,45 @@ public sealed class SuggestionWindow : Form
         {
             Conceal();SetStatus(previousStatus,previousEnabled,previousWorking);
             if(previousText.Length>0)Present(previousText);
+        }
+    }
+    static void VerifyInitialDpi()
+    {
+        foreach(uint dpi in new uint[]{96,120,144,192,240})
+        {
+            int queries=0;
+            using var probe=new SuggestionWindow(new Settings(),hwnd=>
+            {
+                if(!Native.IsWindow(hwnd)||Native.IsWindowVisible(hwnd))throw new InvalidOperationException("DpiQueryBeforeHiddenHandle");
+                queries++;return dpi;
+            });
+            probe.SetStatus("已启用",true,false);
+            int expectedHeight=(int)Math.Ceiling(31*dpi/96f); // 14 DIP text + padding.
+            if(queries!=1||!probe.IsDisplayed||probe.Height!=expectedHeight||probe.lastRenderedSize!=probe.Size)
+                throw new InvalidOperationException("FirstFrameDpi_"+dpi);
+            Size first=probe.Size;
+            probe.SetStatus("已启用",true,false);
+            if(probe.Size!=first)throw new InvalidOperationException("FirstFrameSizeJump_"+dpi);
+            probe.SetStatus("已暂停",false,false);
+            probe.SetStatus("已启用",true,false);
+            if(probe.Size!=first||queries!=1)throw new InvalidOperationException("ResumeDpi_"+dpi);
+            foreach(uint changed in new uint[]{192,96,dpi})
+            {
+                // Feed the real WndProc entry with Windows' documented DPI message.
+                var rectangle=new Native.RECT{Left=probe.Left,Top=probe.Top,Right=probe.Right,Bottom=probe.Bottom};
+                nint memory=Marshal.AllocHGlobal(Marshal.SizeOf<Native.RECT>());
+                try
+                {
+                    Marshal.StructureToPtr(rectangle,memory,false);
+                    var message=Message.Create(probe.Handle,0x02E0,(nint)(changed|(changed<<16)),memory);
+                    probe.WndProc(ref message);
+                }
+                finally{Marshal.FreeHGlobal(memory);}
+                if(probe.Height!=(int)Math.Ceiling(31*changed/96f)||probe.lastRenderedSize!=probe.Size)
+                    throw new InvalidOperationException("MonitorDpiChange_"+changed);
+            }
+            if(probe.Size!=first)throw new InvalidOperationException("DpiRoundTripDrift_"+dpi);
+            probe.SetStatus("已暂停",false,false);
         }
     }
     // Synthetic UI fixtures only: this image never captures the user's desktop.
@@ -311,6 +387,13 @@ public sealed class SuggestionWindow : Form
             {SetStatus(state,true,state.Contains("正在"));frames.Add(RenderFrame());}
             Present("把目标拆分成可以逐步完成的小任务，记录每一步的进展，并根据实际情况调整安排，让计划更容易落实。",true);
             frames.Add(RenderFrame());
+            foreach(uint dpi in new uint[]{96,144,192})
+            {
+                using var probe=new SuggestionWindow(new Settings(),_=>dpi);
+                probe.SetStatus($"缩放 {dpi*100/96}% · 14 DIP",true,false);
+                frames.Add(probe.RenderFrame());
+                probe.SetStatus("已暂停",false,false);
+            }
             using var sheet=new Bitmap(frames.Max(f=>f.Width)+32,frames.Sum(f=>f.Height+16)+16);
             using(var g=Graphics.FromImage(sheet))
             {

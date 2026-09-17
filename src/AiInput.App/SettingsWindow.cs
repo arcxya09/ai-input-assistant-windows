@@ -65,7 +65,7 @@ public sealed class SettingsWindow : Window
         panel.Children.Add(depth);
         panel.Children.Add(new TextBlock{Text="自动采用服务默认思考策略；Max 使用最高思考强度，通常耗时更长、用量更多；不思考直接生成正文。仅显示最终续写。",TextWrapping=TextWrapping.Wrap});
         panel.Children.Add(new TextBlock{Text="浮窗外观",FontSize=18});
-        var font=new Slider{Minimum=12,Maximum=32,StepFrequency=1,Value=controller.Settings.FontSize,Header="统一字号（状态、正文与提示）"};
+        var font=new Slider{Minimum=12,Maximum=32,StepFrequency=1,Value=controller.Settings.FontSize,Header="统一字号（默认 14，随屏幕缩放）"};
         var alpha=new Slider{Minimum=25,Maximum=100,StepFrequency=5,Value=controller.Settings.Opacity*100,Header="背景不透明度（%）"};
         panel.Children.Add(font);panel.Children.Add(alpha);
         panel.Children.Add(new TextBlock{Text="快捷键（均为 Ctrl + Alt + 下列按键）",FontSize=18});

@@ -119,12 +119,27 @@ public sealed class ContextReader : IDisposable
                 caret.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,bounds,TextPatternRangeEndpoint.TextPatternRangeEndpoint_End)>0)
             {LocalStore.Log("UiaSelectionOutsideFocus");throw new InvalidOperationException("TargetChanged");}
             bounds=pattern.DocumentRange;
+            // Chromium may expose TextPattern on each paragraph while its
+            // GetSelection reports the entire document selection. Walk to the
+            // nearest ancestor text document that actually contains that range.
+            var container=element;
+            for(int i=0;i<20&&!Contains(bounds,caret)&&automation.CompareElements(container,root)==0;i++)
+            {
+                container=automation.RawViewWalker.GetParentElement(container);
+                if(container==null)break;
+                if(container.GetCurrentPropertyValueEx(30019,1) is bool protectedText&&protectedText)
+                    throw new InvalidOperationException("ProtectedOrUnknown");
+                if(Pattern(container,10014) is IUIAutomationTextPattern parentText)bounds=parentText.DocumentRange;
+            }
         }
         if(caret.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,bounds,TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start)<0||
             caret.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_End,bounds,TextPatternRangeEndpoint.TextPatternRangeEndpoint_End)>0)
         {LocalStore.Log("UiaRangeOutsideBounds");throw new InvalidOperationException("TargetChanged");}
         return(focused,caret,bounds,hwnd,(int)pid);
     }
+    static bool Contains(IUIAutomationTextRange bounds,IUIAutomationTextRange range)=>
+        range.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,bounds,TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start)>=0&&
+        range.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_End,bounds,TextPatternRangeEndpoint.TextPatternRangeEndpoint_End)<=0;
     static bool Collapsed(IUIAutomationTextRange range)=>range.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,range,TextPatternRangeEndpoint.TextPatternRangeEndpoint_End)==0;
     static bool SameRange(IUIAutomationTextRange a,IUIAutomationTextRange b)=>
         a.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,b,TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start)==0&&

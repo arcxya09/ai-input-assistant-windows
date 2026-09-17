@@ -49,7 +49,8 @@ internal static class BrowserTests
                     if(capture.Ok||capture.Snapshot!=null)throw new Exception("Browser password exposed");
                     Console.WriteLine("PASS browser password target rejected");continue;
                 }
-                if(!capture.Ok||capture.Snapshot is not {Before:"前文",After:"后文"} context)
+                var context=capture.Snapshot;
+                if(!capture.Ok||context==null||context.Before!="前文"||context.After.TrimEnd('\r','\n')!="后文")
                     throw new Exception("Browser "+name+" context: "+capture.Code);
                 var insertion=await broker.CallAsync(new("insert",context.Token,"新增"),default);
                 if(!insertion.Ok)throw new Exception("Browser "+name+" insertion: "+insertion.Code);

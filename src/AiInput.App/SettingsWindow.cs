@@ -94,6 +94,7 @@ public sealed class SettingsWindow : Window
         Closed+=(_,_)=>{controller.Changed-=Update;controller.Updates.Changed-=UpdateDownload;};Update();UpdateDownload();
     }
     void Update()=>status.Text=controller.Status+(controller.HotkeyError.Length>0?"\n快捷键问题："+controller.HotkeyError:"");
+    public void ShowUpdates()=>DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,()=>updateStatus.StartBringIntoView());
     void UpdateDownload()
     {
         var u=controller.Updates;

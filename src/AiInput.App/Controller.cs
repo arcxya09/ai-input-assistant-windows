@@ -47,12 +47,12 @@ public sealed class Controller : IDisposable
         tray=new Forms.NotifyIcon{Text="AI 输入助手 · 已暂停",Icon=new Drawing.Icon(Path.Combine(AppContext.BaseDirectory,"Assets","App.ico")),Visible=true};
         var menu=new Forms.ContextMenuStrip();
         menu.Items.Add("设置",null,(_,_)=>dispatcher.TryEnqueue(OpenSettings));
-        menu.Items.Add("检查更新",null,(_,_)=>dispatcher.TryEnqueue(()=>{OpenSettings();_=Updates?.CheckAsync();}));
+        menu.Items.Add("检查更新",null,(_,_)=>dispatcher.TryEnqueue(()=>{OpenUpdateSettings();_=Updates?.CheckAsync();}));
         menu.Items.Add("启用／暂停",null,(_,_)=>dispatcher.TryEnqueue(Toggle));
         menu.Items.Add("退出",null,(_,_)=>dispatcher.TryEnqueue(Quit));
         tray.ContextMenuStrip=menu;
         tray.DoubleClick+=(_,_)=>dispatcher.TryEnqueue(OpenSettings);
-        tray.BalloonTipClicked+=(_,_)=>dispatcher.TryEnqueue(OpenSettings);
+        tray.BalloonTipClicked+=(_,_)=>dispatcher.TryEnqueue(OpenUpdateSettings);
         Updates=new(Settings,message=>tray.ShowBalloonTip(7000,"AI 输入助手 · 更新",message,Forms.ToolTipIcon.Info),Quit);
         HotkeyError=monitor.Register(Settings);
         if(!monitor.HooksAvailable)HotkeyError+=" 输入监听不可用";
@@ -70,6 +70,7 @@ public sealed class Controller : IDisposable
         window.Activate();
         if(window.AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)presenter.Restore();
     }
+    void OpenUpdateSettings(){OpenSettings();window?.ShowUpdates();}
     void SetStatus(string status)
     {
         if(disposed)return;

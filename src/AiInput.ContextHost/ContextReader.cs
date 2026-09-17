@@ -154,7 +154,7 @@ public sealed class ContextReader : IDisposable
             return new(){Code=code is "Composing" or "CompositionUnsupported" or "ProtectedOrUnknown" or
                 "ReadOnlyOrUnknown" or "SelectionNotEmpty" or "TextPatternUnavailable" or "NoTarget" ? code:"ContextUnavailable"};
         }
-        catch{return new(){Code="ContextUnavailable"};}
+        catch(Exception error){LocalStore.Log("ContextProviderFailed",error);return new(){Code="ContextUnavailable"};}
     }
     bool Validate(string token)
     {

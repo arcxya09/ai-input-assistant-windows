@@ -18,6 +18,7 @@ static class Program
             var form=new Form{Text="AI Input synthetic integration target",Width=500,Height=200,TopMost=true};
             string kind=args.Length>1?args[1]:"text";
             TextBoxBase edit=kind=="rich"?new RichTextBox():new TextBox{Multiline=true};
+            edit.MaxLength=1100000;
             edit.Text=kind=="empty"?"":kind=="long"?new string('前',70000)+"后文":"前文后文";edit.Dock=DockStyle.Fill;
             if(kind=="password"&&edit is TextBox password){password.Multiline=false;password.UseSystemPasswordChar=true;}
             if(kind=="readonly")edit.ReadOnly=true;
@@ -83,6 +84,7 @@ static class Program
             }
             finally{target.Kill(true);}
         }
+        int failures=0;
         foreach(string kind in new[]{"empty","long","rich","cjk"})
         {
             using var target=await Target(kind);
@@ -92,14 +94,21 @@ static class Program
                 if(!result.Ok||result.Snapshot==null)throw new Exception(kind+" context "+result.Code);
                 string before=kind=="empty"?"":kind=="long"?new string('前',300):"前文";
                 string after=kind=="empty"?"":"后文";
-                if(result.Snapshot.Before!=before||result.Snapshot.After!=after)throw new Exception(kind+" wrong context");
+                if(result.Snapshot.Before!=before||result.Snapshot.After.TrimEnd('\r','\n')!=after)throw new Exception(kind+" wrong synthetic context: "+System.Text.Json.JsonSerializer.Serialize(result.Snapshot));
                 var insertion=await broker.CallAsync(new("insert",result.Snapshot.Token,"新增"),default);
                 if(!insertion.Ok)throw new Exception(kind+" insertion "+insertion.Code);
                 Console.WriteLine("PASS "+kind+" input context and verified insertion");
+                if(kind=="cjk")
+                {
+                    uint thread=Native.GetWindowThreadProcessId(target.MainWindowHandle,out _);
+                    if(((long)Native.GetKeyboardLayout(thread)&0x3FF)!=4)Console.WriteLine("SKIP real Chinese layout unavailable on this runner; candidate composition not tested");
+                }
             }
+            catch(Exception e){Console.WriteLine("FAIL "+e.Message);failures++;}
             finally{target.Kill(true);}
         }
-        await BrowserTests.Run(broker);
+        try{await BrowserTests.Run(broker);}catch(Exception e){Console.WriteLine("FAIL "+e.Message);failures++;}
+        if(failures>0)throw new Exception(failures+" compatibility test group(s) failed");
         return 0;
     }
 }

@@ -4,13 +4,13 @@
 
 ## 获取程序
 
-在 [Windows 构建任务](https://github.com/arcxya09/ai-input-assistant-windows/actions/workflows/windows.yml) 的成功运行中下载 `AiInputAssistant-1.0.0-win-x64`：
+从 [GitHub Release v1.0.0](https://github.com/arcxya09/ai-input-assistant-windows/releases/tag/v1.0.0) 下载：
 
-- `AiInputAssistant-1.0.0-Setup-x64.exe`：每用户安装程序。
-- `AiInputAssistant-1.0.0-win-x64.zip`：自包含便携目录，完整解压后运行 `AiInputAssistant.exe`。
-- `SHA256SUMS.txt`：校验值。
+- [安装版 EXE](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.0.0/AiInputAssistant-1.0.0-Setup-x64.exe)：每用户安装程序。
+- [便携版 ZIP](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.0.0/AiInputAssistant-1.0.0-win-x64.zip)：完整解压后运行 `AiInputAssistant.exe`。
+- [SHA256SUMS.txt](https://github.com/arcxya09/ai-input-assistant-windows/releases/download/v1.0.0/SHA256SUMS.txt)：校验值。
 
-不要单独复制主程序 EXE；它需要同目录的运行时、PRI 和 ContextHost。构建失败的运行不会提供发行包。
+程序已包含所需运行时。不要单独复制主程序 EXE；它需要同目录的运行时、PRI 和 ContextHost。
 
 ## 功能
 

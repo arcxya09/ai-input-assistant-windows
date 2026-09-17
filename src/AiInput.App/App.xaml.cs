@@ -20,7 +20,7 @@ public partial class App : Application
             timer.Tick+=async(_,_)=>{
                 timer.Stop();
                 try {await controller.SmokeAsync();File.WriteAllText(Program.SmokePath,"PASS WinUI settings, persistent capsule, taskbar minimize/restore, app icon, update controls, tray, hotkeys and ContextHost IPC initialized.");}
-                catch(Exception ex){File.WriteAllText(Program.SmokePath,"FAILED "+ex.GetType().Name);Environment.ExitCode=1;}
+                catch(Exception ex){File.WriteAllText(Program.SmokePath,"FAILED "+ex.GetType().Name+" "+ex.Message);Environment.ExitCode=1;}
                 controller.Quit();
             };
             timer.Start();

@@ -6,6 +6,7 @@ public static class Native
     public const uint InjectionTag = 0x41494931;
     public delegate nint HookProc(int code, nint wParam, nint lParam);
     [DllImport("user32.dll")] public static extern nint GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(nint hwnd);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(nint hwnd, out uint process);
     [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int key);
     [DllImport("user32.dll")] public static extern nint GetKeyboardLayout(uint thread);

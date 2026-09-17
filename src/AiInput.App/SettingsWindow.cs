@@ -26,7 +26,7 @@ public sealed class SettingsWindow : Window
             if(!controller.IsQuitting)
             {
                 args.Cancel=true;
-                if(AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)presenter.Minimize();
+                DispatcherQueue.TryEnqueue(()=>{if(AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)presenter.Minimize();});
             }
         };
         AppWindow.Resize(new global::Windows.Graphics.SizeInt32(700,780));

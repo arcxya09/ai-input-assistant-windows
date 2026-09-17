@@ -67,8 +67,9 @@ public sealed class Controller : IDisposable
             window=new SettingsWindow(this);
             window.Closed+=(_,_)=>window=null;
         }
-        window.Activate();
         if(window.AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)presenter.Restore();
+        window.Activate();
+        Native.SetForegroundWindow(WinRT.Interop.WindowNative.GetWindowHandle(window));
     }
     void OpenUpdateSettings(){OpenSettings();window?.ShowUpdates();}
     void SetStatus(string status)
@@ -255,12 +256,16 @@ public sealed class Controller : IDisposable
         // Exercise the actual title-bar close path. Window.Close() explicitly
         // destroys a WinUI window and bypasses cancellable AppWindow.Closing.
         Native.PostMessage(WinRT.Interop.WindowNative.GetWindowHandle(window),0x112,0xF060,0);
-        await Task.Delay(200);
+        for(int i=0;i<20&&window!=null&&window.AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter pending&&pending.State!=Microsoft.UI.Windowing.OverlappedPresenterState.Minimized;i++)await Task.Delay(100);
         if(window==null||window.AppWindow.Presenter is not Microsoft.UI.Windowing.OverlappedPresenter presenter||presenter.State!=Microsoft.UI.Windowing.OverlappedPresenterState.Minimized)
             throw new InvalidOperationException("TaskbarPersistenceFailed");
         OpenSettings();
         await Task.Delay(300);
-        if(Program.SmokePath!=null)File.WriteAllBytes(Program.SmokePath+".png",ScreenCapture.Capture(WinRT.Interop.WindowNative.GetWindowHandle(window)));
+        if(Program.SmokePath!=null)
+        {
+            try{File.WriteAllBytes(Program.SmokePath+".png",ScreenCapture.Capture(WinRT.Interop.WindowNative.GetWindowHandle(window)));}
+            catch(InvalidOperationException e){File.WriteAllText(Program.SmokePath+".preview.txt","Preview unavailable: "+e.Message);}
+        }
     }
     static string Explain(string code)=>code switch
     {

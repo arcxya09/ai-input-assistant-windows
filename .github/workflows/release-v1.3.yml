@@ -1,0 +1,123 @@
+name: Publish verified v1.3.0 release
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/release-v1.3.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-v1.3.0
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'arcxya09/ai-input-assistant-windows' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: v1.3.0
+      BUILD_SHA: 4f9b86c07c40a47e79fbde9ab4b192eca51faebd
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify build provenance and download exact artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/actions/runs/35205444657" > run.json
+          python3 - <<'PY'
+          import json, os
+          run = json.load(open("run.json"))
+          assert run["conclusion"] == "success", "Build did not pass"
+          assert run["head_sha"] == os.environ["BUILD_SHA"], "Unexpected source commit"
+          assert run["repository"]["full_name"] == os.environ["GH_REPO"], "Unexpected repository"
+          PY
+          gh api "repos/$GH_REPO/actions/artifacts/10490201235/zip" > verified-build.zip
+          echo 'f667549cac0d1bcf090ccb143544be35ae8085975c6bbf99bf11414fe5fae02e  verified-build.zip' | sha256sum --check --strict
+      - name: Verify package checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib, json, pathlib, zipfile
+          target = pathlib.Path("release-assets")
+          target.mkdir()
+          expected = {"AiInputAssistant-1.3.0-Setup-x64.exe", "AiInputAssistant-1.3.0-win-x64.zip", "SHA256SUMS.txt", "smoke.txt", "smoke.txt.png"}
+          with zipfile.ZipFile("verified-build.zip") as archive:
+              assert expected - {"smoke.txt.png"} <= set(archive.namelist()) <= expected, archive.namelist()
+              archive.extractall(target)
+          assert (target / "smoke.txt").read_text(encoding="utf-8-sig").startswith("PASS")
+          checked = set()
+          for line in (target / "SHA256SUMS.txt").read_text(encoding="utf-8-sig").splitlines():
+              digest, name = line.split(maxsplit=1)
+              assert name in expected - {"SHA256SUMS.txt", "smoke.txt", "smoke.txt.png"}
+              actual = hashlib.sha256((target / name).read_bytes()).hexdigest()
+              assert actual == digest.lower(), f"Checksum mismatch: {name}"
+              checked.add(name)
+          assert checked == expected - {"SHA256SUMS.txt", "smoke.txt", "smoke.txt.png"}
+          assets = {}
+          for name in sorted(expected - {"smoke.txt", "smoke.txt.png"}):
+              data = (target / name).read_bytes()
+              assets[name] = {"size": len(data), "digest": "sha256:" + hashlib.sha256(data).hexdigest()}
+          pathlib.Path("expected-assets.json").write_text(json.dumps(assets))
+          print(json.dumps(assets, indent=2))
+          PY
+      - name: Prepare draft and upload packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/releases?per_page=100" > releases.json
+          python3 - <<'PY'
+          import json, os, pathlib
+          releases = json.load(open("releases.json"))
+          existing = [r for r in releases if r["tag_name"] == os.environ["RELEASE_TAG"]]
+          if existing:
+              assert existing[0]["draft"], "Release already published; refusing to modify it"
+              assert existing[0]["target_commitish"] == os.environ["BUILD_SHA"], "Draft source mismatch"
+              pathlib.Path("draft-exists").touch()
+          PY
+          if [ ! -f draft-exists ]; then
+            gh release create "$RELEASE_TAG" --target "$BUILD_SHA" --title "AI 输入助手 v1.3.0" --notes-file docs/releases/v1.3.0.md --draft
+          fi
+          gh release view "$RELEASE_TAG" --json assets > existing-assets.json
+          python3 - <<'PY'
+          import json, pathlib
+          expected = json.load(open("expected-assets.json"))
+          existing = {a["name"]: a for a in json.load(open("existing-assets.json"))["assets"]}
+          assert set(existing) <= set(expected), "Unexpected draft assets"
+          for name, asset in existing.items():
+              assert asset["size"] == expected[name]["size"], "Existing draft asset size mismatch"
+          pathlib.Path("missing-assets.txt").write_text("\n".join(n for n in expected if n not in existing))
+          PY
+          while IFS= read -r name || [ -n "$name" ]; do
+            if [ -n "$name" ]; then gh release upload "$RELEASE_TAG" "release-assets/$name"; fi
+          done < missing-assets.txt
+      - name: Verify uploaded bytes and publish release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/releases?per_page=100" > candidate-releases.json
+          python3 - <<'PY'
+          import json, os
+          candidates = json.load(open("candidate-releases.json"))
+          matched = [r for r in candidates if r["tag_name"] == os.environ["RELEASE_TAG"]]
+          assert len(matched) == 1, "Expected exactly one release"
+          release = matched[0]
+          assert release["draft"], "Expected draft release"
+          expected = json.load(open("expected-assets.json"))
+          assets = {a["name"]: a for a in release["assets"]}
+          assert set(assets) == set(expected), "Incomplete release assets"
+          for name, match in expected.items():
+              asset = assets[name]
+              assert asset["state"] == "uploaded", name
+              assert asset["size"] == match["size"], name
+              assert asset["digest"] == match["digest"], f"Uploaded checksum mismatch: {name}"
+          PY
+          gh release edit "$RELEASE_TAG" --draft=false --latest --notes-file docs/releases/v1.3.0.md
+          gh release view "$RELEASE_TAG" --json url,isDraft,assets

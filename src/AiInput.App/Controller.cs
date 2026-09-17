@@ -170,6 +170,7 @@ public sealed class Controller : IDisposable
         try
         {
             foreground=Native.GetForegroundWindow();
+            SetStatus("正在识别输入框…");
             var capture=await broker.CallAsync(new("capture"),ct);
             if(!gate.IsCurrent(revision))return;
             if(!capture.Ok||capture.Snapshot==null){SetStatus(Explain(capture.Code));return;}

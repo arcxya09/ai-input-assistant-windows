@@ -15,7 +15,10 @@ public sealed class ContextBroker(string? appRoot = null) : IDisposable
         try
         {
             using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(pipe==null?8:2));
+            // Cold accessibility providers and verified insertion can take more
+            // than two seconds. Keep polling bounded while allowing these calls
+            // to finish in the isolated host; user input still cancels immediately.
+            timeout.CancelAfter(TimeSpan.FromSeconds(pipe==null?10:request.Command is "capture" or "insert"?5:2));
             if(pipe==null)
             {
                 string name="AiInput-"+Guid.NewGuid().ToString("N");

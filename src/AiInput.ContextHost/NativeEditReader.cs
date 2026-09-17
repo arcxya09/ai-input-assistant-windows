@@ -35,7 +35,8 @@ internal static class NativeEditReader
         Native.GetClassName(hwnd, name, name.Capacity);
         string cls = name.ToString();
         bool edit = cls.Equals("Edit", StringComparison.OrdinalIgnoreCase) || cls.StartsWith("WindowsForms10.EDIT.", StringComparison.OrdinalIgnoreCase);
-        bool rich = cls.Equals("RichEdit20W", StringComparison.OrdinalIgnoreCase) || cls.Equals("RICHEDIT50W", StringComparison.OrdinalIgnoreCase);
+        bool rich = cls.Equals("RichEdit20W", StringComparison.OrdinalIgnoreCase) || cls.Equals("RICHEDIT50W", StringComparison.OrdinalIgnoreCase) ||
+            cls.StartsWith("WindowsForms10.RICHEDIT", StringComparison.OrdinalIgnoreCase);
         if (!edit && !rich) return null;
         long style = (long)Native.GetWindowLongPtr(hwnd, -16);
         if ((style & 0x20) != 0) throw new InvalidOperationException("ProtectedOrUnknown");

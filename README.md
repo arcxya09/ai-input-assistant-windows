@@ -56,6 +56,7 @@ Windows 上安装 .NET SDK 10.0.401、Windows SDK 和 Inno Setup 6，运行：
 ## 文档
 
 - [使用说明](docs/user-guide.md)
+- [v1.1 实现与验证记录](docs/implementation-v1.1.md)
 - [需求基线](docs/requirements.md)
 - [软件工程技术方案](docs/architecture.md)
 - [验收矩阵](docs/acceptance.md)

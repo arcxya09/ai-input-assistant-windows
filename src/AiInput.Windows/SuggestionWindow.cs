@@ -39,8 +39,8 @@ public sealed class SuggestionWindow : Form
     {
         get{var p=base.CreateParams;p.ExStyle|=0x08000000|0x00080000|0x80;return p;}
     }
-    float Scale=>IsHandleCreated?Math.Max(1,Native.GetDpiForWindow(Handle)/96f):1;
-    float BodyHeight=>Math.Max(1,Height-76*Scale);
+    float DpiScale=>IsHandleCreated?Math.Max(1,Native.GetDpiForWindow(Handle)/96f):1;
+    float BodyHeight=>Math.Max(1,Height-76*DpiScale);
     string CompactStatus
     {
         get
@@ -78,7 +78,7 @@ public sealed class SuggestionWindow : Form
         resizing=true;
         try
         {
-            float scale=Scale;
+            float scale=DpiScale;
             MinimumSize=text.Length==0?new Size((int)(88*scale),(int)(30*scale)):new Size((int)(280*scale),(int)(120*scale));
             using var bitmap=new Bitmap(1,1);
             using var g=Graphics.FromImage(bitmap);
@@ -94,7 +94,7 @@ public sealed class SuggestionWindow : Form
                 int width=Math.Clamp(settings.Width,(int)(320*scale),Math.Max((int)(320*scale),Math.Min((int)(900*scale),area.Width)));
                 using var font=new Font("Microsoft YaHei UI",(float)settings.FontSize*scale,FontStyle.Regular,GraphicsUnit.Pixel);
                 using var format=TextFormat();
-                float measured=g.MeasureString(text,font,Math.Max(1,width-36*scale),format).Height+font.GetHeight(g);
+                float measured=g.MeasureString(text,font,new SizeF(Math.Max(1,width-36*scale),1000000),format).Height+font.GetHeight(g);
                 int height=(int)Math.Ceiling(measured+76*scale);
                 Size=new Size(width,Math.Clamp(height,(int)(120*scale),Math.Max((int)(120*scale),(int)(area.Height*.65))));
             }
@@ -128,13 +128,13 @@ public sealed class SuggestionWindow : Form
         if(m.Msg==0x20A&&text.Length>0)
         {
             int delta=(short)((m.WParam.ToInt64()>>16)&0xFFFF);
-            ScrollBy(-delta/120f*(float)settings.FontSize*Scale*3);m.Result=0;return;
+            ScrollBy(-delta/120f*(float)settings.FontSize*DpiScale*3);m.Result=0;return;
         }
         if(m.Msg==0x84)
         {
             long packed=m.LParam.ToInt64();
             var point=PointToClient(new Point((short)(packed&0xFFFF),(short)((packed>>16)&0xFFFF)));
-            m.Result=text.Length>0&&point.X>Width-18*Scale&&point.Y>Height-18*Scale?17:2;return;
+            m.Result=text.Length>0&&point.X>Width-18*DpiScale&&point.Y>Height-18*DpiScale?17:2;return;
         }
         if(m.Msg==0x0232){SaveBounds();Render();}
         if(m.Msg==0x02E0){base.WndProc(ref m);SetDisplaySize();EnsureVisible();Render();return;}
@@ -155,7 +155,7 @@ public sealed class SuggestionWindow : Form
             path.AddArc(Width-r-1,Height-r-1,r,r,0,90);path.AddArc(0,Height-r-1,r,r,90,90);path.CloseFigure();
             using var bg=new SolidBrush(Color.FromArgb((int)(255*settings.Opacity),23,29,40));g.FillPath(bg,path);
             using var border=new Pen(Color.FromArgb(180,81,101,126));g.DrawPath(border,path);
-            float scale=Scale;
+            float scale=DpiScale;
             using var font=new Font("Microsoft YaHei UI",(float)settings.FontSize*scale,FontStyle.Regular,GraphicsUnit.Pixel);
             using var small=new Font("Microsoft YaHei UI",11*scale,FontStyle.Regular,GraphicsUnit.Pixel);
             using var white=new SolidBrush(Color.White);
@@ -171,7 +171,7 @@ public sealed class SuggestionWindow : Form
             else
             {
                 using var format=TextFormat();
-                contentHeight=g.MeasureString(text,font,Math.Max(1,Width-36*scale),format).Height+font.GetHeight(g);
+                contentHeight=g.MeasureString(text,font,new SizeF(Math.Max(1,Width-36*scale),1000000),format).Height+font.GetHeight(g);
                 scroll=Math.Clamp(scroll,0,Math.Max(0,contentHeight-BodyHeight));
                 var state=g.Save();
                 g.SetClip(new RectangleF(18*scale,16*scale,Width-36*scale,BodyHeight));
@@ -201,9 +201,9 @@ public sealed class SuggestionWindow : Form
         try
         {
             Conceal();SetStatus("已暂停",false,false);int compact=Width;
-            if(Height>31*Scale||Width>120*Scale)throw new InvalidOperationException("CapsuleNotCompact");
+            if(Height>31*DpiScale||Width>120*DpiScale)throw new InvalidOperationException("CapsuleNotCompact");
             SetStatus("已识别 300 字 · 正在续写…",true,true);
-            if(Width<=compact||Width>240*Scale)throw new InvalidOperationException("CapsuleNotAdaptive");
+            if(Width<=compact||Width>240*DpiScale)throw new InvalidOperationException("CapsuleNotAdaptive");
             string paragraph=string.Concat(Enumerable.Repeat("这里是一段完整的测试内容，用于检查长建议能够完整预览和翻页。",100));
             Present(paragraph);
             if(contentHeight<=BodyHeight)throw new InvalidOperationException("LongPreviewMissing");

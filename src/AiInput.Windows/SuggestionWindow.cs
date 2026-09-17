@@ -18,7 +18,9 @@ public sealed class SuggestionWindow : Form
     public SuggestionWindow(Settings settings)
     {
         this.settings=settings;
-        FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;TopMost=true;
+        // Form.TopMost re-applies SetWindowPos without SWP_NOACTIVATE during
+        // first handle creation. Apply topmost only through ShowOverlay instead.
+        FormBorderStyle=FormBorderStyle.None;ShowInTaskbar=false;
         StartPosition=FormStartPosition.Manual;
         MinimumSize=new Size(88,30);
         Bounds=new Rectangle(settings.X,settings.Y,120,30);
@@ -37,8 +39,7 @@ public sealed class SuggestionWindow : Form
     public bool IsDisplayed=>IsHandleCreated&&Native.IsWindowVisible(Handle);
     void ShowOverlay()
     {
-        // Showing the first WinForms form in a WinUI process can activate it.
-        // Keep the HWND lifecycle, but show only through SWP_NOACTIVATE.
+        // Apply visibility and topmost together with SWP_NOACTIVATE.
         if(!IsHandleCreated)CreateHandle();
         if(!Native.SetWindowPos(Handle,-1,Left,Top,Width,Height,0x0010|0x0040))
             throw new InvalidOperationException("OverlayShowFailed");

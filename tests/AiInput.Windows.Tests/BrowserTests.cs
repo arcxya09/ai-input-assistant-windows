@@ -42,7 +42,15 @@ internal static class BrowserTests
                     if(field==null)await Task.Delay(250);
                 }
                 if(field==null)throw new Exception("Browser field missing: "+name);
-                SetForegroundWindow(process.MainWindowHandle);field.SetFocus();await Task.Delay(500);
+                SetForegroundWindow(process.MainWindowHandle);field.SetFocus();await Task.Delay(300);
+                // UIA SetFocus can reset the DOM onfocus caret; use normal keys to
+                // place a real user caret deterministically inside the field.
+                var keys=new List<Native.INPUT>();
+                void Key(ushort key,bool up=false)=>keys.Add(new Native.INPUT{Type=1,U=new Native.INPUTUNION{Key=new Native.KEYBD{Vk=key,Flags=up?2u:0u,Extra=Native.InjectionTag}}});
+                Key(0x11);Key(0x24);Key(0x24,true);Key(0x11,true);
+                Key(0x27);Key(0x27,true);Key(0x27);Key(0x27,true);
+                if(Native.SendInput((uint)keys.Count,keys.ToArray(),Marshal.SizeOf<Native.INPUT>())!=keys.Count)throw new Exception("Browser caret setup failed");
+                await Task.Delay(300);
                 var capture=await broker.CallAsync(new("capture"),default);
                 if(name=="Password field")
                 {
@@ -51,7 +59,7 @@ internal static class BrowserTests
                 }
                 var context=capture.Snapshot;
                 if(!capture.Ok||context==null||context.Before!="前文"||context.After.TrimEnd('\r','\n')!="后文")
-                    throw new Exception("Browser "+name+" context: "+capture.Code);
+                    throw new Exception("Browser "+name+" synthetic context: "+capture.Code+" "+System.Text.Json.JsonSerializer.Serialize(context));
                 var insertion=await broker.CallAsync(new("insert",context.Token,"新增"),default);
                 if(!insertion.Ok)throw new Exception("Browser "+name+" insertion: "+insertion.Code);
                 Console.WriteLine("PASS browser "+name+" context and verified insertion");

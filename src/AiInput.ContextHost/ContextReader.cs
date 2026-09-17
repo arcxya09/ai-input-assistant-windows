@@ -39,13 +39,14 @@ public sealed class ContextReader : IDisposable
         snapshot=result;
         return new(true,"Ready",result);
     }
-    (IUIAutomationElement Element,IUIAutomationTextRange Caret,nint Window,int Process) Locate()
+    (IUIAutomationElement Element,IUIAutomationTextRange Caret,IUIAutomationTextRange Bounds,nint Window,int Process) Locate()
     {
         if(!Native.InteractiveDesktop())throw new InvalidOperationException("DesktopUnavailable");
         nint hwnd=Native.GetForegroundWindow();
         uint thread=Native.GetWindowThreadProcessId(hwnd,out uint pid);
         if(hwnd==0||pid==parent||pid==Environment.ProcessId)throw new InvalidOperationException("NoTarget");
         var element=automation.GetFocusedElement();
+        var focused=element;
         if(element==null||element.CurrentHasKeyboardFocus==0||element.CurrentIsEnabled==0)
             throw new InvalidOperationException("NoFocus");
         // Browser accessibility providers may live in a renderer process.
@@ -69,6 +70,7 @@ public sealed class ContextReader : IDisposable
             element=candidate;pattern=Pattern(element,10014) as IUIAutomationTextPattern;
         }
         if(pattern==null)throw new InvalidOperationException("TextPatternUnavailable");
+        var bounds=automation.CompareElements(element,focused)!=0?pattern.DocumentRange:pattern.RangeFromChild(focused);
         var selection=pattern.GetSelection();
         if(selection.Length>1)throw new InvalidOperationException("SelectionUnsupported");
         var selected=selection.Length==1?selection.GetElement(0):null;
@@ -86,7 +88,7 @@ public sealed class ContextReader : IDisposable
         {
             if(readOnly)throw new InvalidOperationException("ReadOnlyOrUnknown");
         }
-        else if(Pattern(element,10002) is not IUIAutomationValuePattern value||value.CurrentIsReadOnly!=0)
+        else if((Pattern(focused,10002)??Pattern(element,10002)) is not IUIAutomationValuePattern value||value.CurrentIsReadOnly!=0)
             throw new InvalidOperationException("ReadOnlyOrUnknown");
         if(Pattern(element,10032) is IUIAutomationTextEditPattern edit)
         {
@@ -95,7 +97,10 @@ public sealed class ContextReader : IDisposable
                 throw new InvalidOperationException("Composing");
         }
         if(NativeEditReader.IsComposing(NativeEditReader.FocusWindow(thread)))throw new InvalidOperationException("Composing");
-        return(element,caret,hwnd,(int)pid);
+        if(caret.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,bounds,TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start)<0||
+            caret.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_End,bounds,TextPatternRangeEndpoint.TextPatternRangeEndpoint_End)>0)
+            throw new InvalidOperationException("TargetChanged");
+        return(focused,caret,bounds,hwnd,(int)pid);
     }
     static object? Pattern(IUIAutomationElement element,int id)
     {try{return element.GetCurrentPattern(id);}catch(COMException){return null;}}
@@ -135,8 +140,12 @@ public sealed class ContextReader : IDisposable
             long version=Interlocked.Read(ref handler.Version);
             var before=current.Caret.Clone();
             before.MoveEndpointByUnit(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,TextUnit.TextUnit_Character,-300);
+            if(before.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,current.Bounds,TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start)<0)
+                before.MoveEndpointByRange(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,current.Bounds,TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start);
             var after=current.Caret.Clone();
             after.MoveEndpointByUnit(TextPatternRangeEndpoint.TextPatternRangeEndpoint_End,TextUnit.TextUnit_Character,300);
+            if(after.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_End,current.Bounds,TextPatternRangeEndpoint.TextPatternRangeEndpoint_End)>0)
+                after.MoveEndpointByRange(TextPatternRangeEndpoint.TextPatternRangeEndpoint_End,current.Bounds,TextPatternRangeEndpoint.TextPatternRangeEndpoint_End);
             string left=TextPolicy.Tail(before.GetText(4096),300);
             string right=TextPolicy.Head(after.GetText(4096),300);
             var end=Locate();

@@ -2,6 +2,21 @@ using System.Text;
 using System.Text.Json;
 using AiInput.Core;
 using AiInput.DeepSeek;
+if(args is ["--github-update-smoke"])
+{
+    using var http=new HttpClient{Timeout=Timeout.InfiniteTimeSpan};
+    var updates=new UpdateClient(http);
+    var release=await updates.CheckAsync(new Version(0,0,0),default)??throw new Exception("No public GitHub release");
+    string directory=Path.Combine(Path.GetTempPath(),"AiInput-live-update-"+Guid.NewGuid().ToString("N"));
+    try
+    {
+        string installer=await updates.DownloadAsync(release,directory,null,default);
+        if(!await UpdateClient.VerifyFileAsync(installer,release.Size,release.Sha256,default))throw new Exception("Live download verification failed");
+        Console.WriteLine("PASS real GitHub metadata, release asset download and SHA-256 verification: "+release.Tag);
+    }
+    finally{if(Directory.Exists(directory))Directory.Delete(directory,true);}
+    return;
+}
 int count=0;
 void Check(bool condition,string name){if(!condition)throw new Exception("FAIL "+name);Console.WriteLine("PASS "+name);count++;}
 async Task Reject(Func<Task> action,string name)

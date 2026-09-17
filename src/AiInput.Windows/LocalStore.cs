@@ -8,6 +8,7 @@ public sealed class Settings
 {
     public int Schema { get; set; }=1;
     public bool AutoUpdate { get; set; }=true;
+    public string ThinkingDepth { get; set; }="auto";
     public double FontSize { get; set; }=16;
     public double Opacity { get; set; }=.85;
     public int X { get; set; }=120;
@@ -28,6 +29,7 @@ public static class LocalStore
         {
             var s=JsonSerializer.Deserialize<Settings>(File.ReadAllText(Path.Combine(Root,"settings.json")))??new();
             if(s.Schema!=1)return new();
+            if(s.ThinkingDepth is not ("auto" or "max" or "none"))s.ThinkingDepth="auto";
             s.FontSize=Math.Clamp(s.FontSize,12,32);s.Opacity=Math.Clamp(s.Opacity,.25,1);
             s.Width=Math.Clamp(s.Width,260,1000);s.Height=Math.Clamp(s.Height,110,700);
             return s;

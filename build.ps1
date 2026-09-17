@@ -27,6 +27,10 @@ if($process.ExitCode -ne 0 -or !(Test-Path $smoke)){
     throw "UI startup failed: $($process.ExitCode)"
 }
 if(!(Get-Content $smoke -Raw).StartsWith("PASS")){throw (Get-Content $smoke -Raw)}
+# Small synthetic rendering fixture for visual review; contains no desktop/user data.
+if(Test-Path ($smoke+'.png')) {
+    Write-Host ('CAPSULE_PREVIEW_BASE64='+[Convert]::ToBase64String([IO.File]::ReadAllBytes($smoke+'.png')))
+}
 Compress-Archive -Path artifacts/app/* -DestinationPath "artifacts/AiInputAssistant-$version-win-x64.zip" -Force
 $compiler="C:/Program Files (x86)/Inno Setup 6/ISCC.exe"
 if(!(Test-Path $compiler)){throw "Inno Setup 6 is required to build the installer"}

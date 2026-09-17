@@ -76,7 +76,7 @@ using(var memory=new MemoryStream())
 }
 await Reject(async()=>{using var stream=new MemoryStream(BitConverter.GetBytes(70000));await Frames.ReadAsync<RpcReply>(stream,default);},"oversized IPC rejected");
 byte[] image=[1,2,3,4,5];
-using(var content=new OneShotContent(original,image))
+using(var content=new OneShotContent(original,image,ThinkingOptions.None))
 {
     using var memory=new MemoryStream();await content.CopyToAsync(memory);
     using var doc=JsonDocument.Parse(memory.ToArray());
@@ -111,5 +111,6 @@ using(var memory=new MemoryStream())
     Check((await Frames.ReadAsync<RpcReply>(memory,default)).Snapshot?.SelectedText==large.SelectedText,"full selection fits IPC without truncation");
 }
 count+=await CompletionTests.Run();
+count+=await ThinkingTests.Run();
 count+=await UpdateTests.Run();
 Console.WriteLine("TOTAL "+count+" PASSED");

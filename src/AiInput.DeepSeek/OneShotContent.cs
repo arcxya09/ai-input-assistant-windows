@@ -14,7 +14,7 @@ public sealed class OneShotContent : HttpContent
     readonly byte[] prefix;
     readonly byte[] suffix;
     bool sent;
-    public OneShotContent(ContextSnapshot context, byte[]? ownedImage)
+    public OneShotContent(ContextSnapshot context, byte[]? ownedImage, string thinkingDepth=ThinkingOptions.Auto)
     {
         if(context.IsSelection && ownedImage != null){CryptographicOperations.ZeroMemory(ownedImage);ownedImage=null;}
         image = ownedImage;
@@ -22,7 +22,7 @@ public sealed class OneShotContent : HttpContent
         if(context.SelectedText.Length>TextPolicy.MaxSelectionChars)throw new InvalidDataException("SelectionTooLarge");
         string user = context.IsSelection ? JsonSerializer.Serialize(new { selection = context.SelectedText }) :
             JsonSerializer.Serialize(new { before = context.Before, after = context.After });
-        string start = "{\"model\":\"deepseek-flash\",\"thinking\":{\"type\":\"disabled\"},\"stream\":true,\"max_tokens\":4096,\"response_format\":{\"type\":\"json_object\"},\"messages\":[{\"role\":\"system\",\"content\":" +
+        string start = "{\"model\":\"deepseek-flash\"," + ThinkingOptions.RequestFields(thinkingDepth) + "\"stream\":true,\"response_format\":{\"type\":\"json_object\"},\"messages\":[{\"role\":\"system\",\"content\":" +
             JsonSerializer.Serialize(context.IsSelection ? CompletionClient.SelectionPrompt : CompletionClient.Prompt) + "},{\"role\":\"user\",\"content\":";
         if (ownedImage == null)
         {

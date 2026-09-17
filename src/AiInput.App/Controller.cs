@@ -120,7 +120,7 @@ public sealed class Controller : IDisposable
         try
         {
             if(id==1)Toggle();
-            if(id==2&&!inserting)
+            if(id==2&&!inserting&&gate.Enabled)
             {
                 Invalidate();due=DateTime.MaxValue;
                 long shotRevision=gate.Revision;
@@ -190,7 +190,7 @@ public sealed class Controller : IDisposable
                 image=ScreenCapture.Capture((nint)target.Window);
             }
             SetStatus(target.IsSelection?$"已选中 {target.SelectedText.Length} 字 · 正在续写…":screenshot?"已识别输入框 · 正在根据截图续写…":$"已识别 {target.Before.Length+target.After.Length} 字 · 正在续写…");
-            var result=await client.GenerateAsync(key,target,image,ct);
+            var result=await client.GenerateAsync(key,target,image,ct,Settings.ThinkingDepth);
             image=null; // Request content owns and clears the image.
             if(!gate.IsCurrent(revision))return;
             var valid=await broker.CallAsync(new("probe",target.Token),ct);
@@ -261,23 +261,27 @@ public sealed class Controller : IDisposable
     public async Task SmokeAsync()
     {
         var reply=await broker.CallAsync(new("ping"),CancellationToken.None);
-        if(!reply.Ok||window==null||!monitor.HooksAvailable||!overlay.Visible)throw new InvalidOperationException("SmokeFailed");
+        if(!reply.Ok||window==null||!monitor.HooksAvailable||overlay.Visible)throw new InvalidOperationException("SmokeFailed");
         // Exercise the actual title-bar close path. Window.Close() explicitly
         // destroys a WinUI window and bypasses cancellable AppWindow.Closing.
         Native.PostMessage(WinRT.Interop.WindowNative.GetWindowHandle(window),0x112,0xF060,0);
         for(int i=0;i<20&&window!=null&&window.AppWindow.IsVisible;i++)await Task.Delay(100);
-        if(window==null||window.AppWindow.IsVisible||window.AppWindow.IsShownInSwitchers||!overlay.Visible||!tray.Visible||disposed)
+        if(window==null||window.AppWindow.IsVisible||window.AppWindow.IsShownInSwitchers||overlay.Visible||!tray.Visible||disposed)
             throw new InvalidOperationException("BackgroundHideFailed");
         OpenSettings();
         await Task.Delay(300);
         if(!window.AppWindow.IsVisible||!window.AppWindow.IsShownInSwitchers)
             throw new InvalidOperationException("BackgroundRestoreFailed");
-        overlay.VerifyDisplay();
-        if(Program.SmokePath!=null)
+        overlay.VerifyDisplay(Program.SmokePath==null?null:Program.SmokePath+".png");
+        if(overlay.Visible)throw new InvalidOperationException("SmokeLeftPausedOverlayVisible");
+        var legacy=System.Text.Json.JsonSerializer.Deserialize<Settings>("{\"Schema\":1,\"FontSize\":19}")!;
+        if(legacy.ThinkingDepth!="auto"||legacy.FontSize!=19)throw new InvalidOperationException("ThinkingMigrationFailed");
+        foreach(string depth in new[]{"auto","max","none"})
         {
-            try{File.WriteAllBytes(Program.SmokePath+".png",ScreenCapture.Capture(WinRT.Interop.WindowNative.GetWindowHandle(window)));}
-            catch(InvalidOperationException e){File.WriteAllText(Program.SmokePath+".preview.txt","Preview unavailable: "+e.Message);}
+            var restored=System.Text.Json.JsonSerializer.Deserialize<Settings>(System.Text.Json.JsonSerializer.Serialize(new Settings{ThinkingDepth=depth}));
+            if(restored?.ThinkingDepth!=depth)throw new InvalidOperationException("ThinkingPersistenceFailed");
         }
+
     }
     static string Explain(string code)=>code switch
     {

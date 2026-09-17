@@ -45,8 +45,27 @@ public sealed class SettingsWindow : Window
         };
         var clear=new Button{Content="删除密钥"};clear.Click+=(_,_)=>{try{LocalStore.DeleteKey();key.Password="";controller.Pause();feedback.Text="密钥已删除";}catch(Exception e){LocalStore.Log("KeyDeleteFailed",e);}};
         buttons.Children.Add(save);buttons.Children.Add(clear);panel.Children.Add(buttons);
+        panel.Children.Add(new TextBlock{Text="思考深度",FontSize=18});
+        var depth=new ComboBox{HorizontalAlignment=HorizontalAlignment.Stretch};
+        foreach(var option in new[]{("auto","自动（默认）"),("max","Max 深度"),("none","不思考")})
+        {
+            var item=new ComboBoxItem{Content=option.Item2,Tag=option.Item1};depth.Items.Add(item);
+            if(option.Item1==controller.Settings.ThinkingDepth)depth.SelectedItem=item;
+        }
+        if(depth.SelectedItem==null)depth.SelectedIndex=0;
+        depth.SelectionChanged+=(_,_)=>
+        {
+            try
+            {
+                controller.Settings.ThinkingDepth=(string)((ComboBoxItem)depth.SelectedItem).Tag;
+                controller.SaveSettings();feedback.Text="思考深度已保存，请重新启用。";
+            }
+            catch(Exception e){LocalStore.Log("ThinkingSettingFailed",e);feedback.Text="思考深度保存失败";}
+        };
+        panel.Children.Add(depth);
+        panel.Children.Add(new TextBlock{Text="自动采用服务默认思考策略；Max 使用最高思考强度，通常耗时更长、用量更多；不思考直接生成正文。仅显示最终续写。",TextWrapping=TextWrapping.Wrap});
         panel.Children.Add(new TextBlock{Text="浮窗外观",FontSize=18});
-        var font=new Slider{Minimum=12,Maximum=32,StepFrequency=1,Value=controller.Settings.FontSize,Header="字号"};
+        var font=new Slider{Minimum=12,Maximum=32,StepFrequency=1,Value=controller.Settings.FontSize,Header="统一字号（状态、正文与提示）"};
         var alpha=new Slider{Minimum=25,Maximum=100,StepFrequency=5,Value=controller.Settings.Opacity*100,Header="背景不透明度（%）"};
         panel.Children.Add(font);panel.Children.Add(alpha);
         panel.Children.Add(new TextBlock{Text="快捷键（均为 Ctrl + Alt + 下列按键）",FontSize=18});
@@ -68,7 +87,7 @@ public sealed class SettingsWindow : Window
             }
             catch(Exception e){LocalStore.Log("SettingsSaveFailed",e);feedback.Text="设置保存失败";}
         };panel.Children.Add(appearance);
-        panel.Children.Add(new TextBlock{Text="停顿 1.5 秒后生成；无选区时读取光标前后各 300 字符，采纳后原位插入。有选区时只根据选中文字续写，采纳键复制结果到剪贴板，保留原文；不附带截图。选区最多 8192 个 UTF-16 单元，超限会提示缩小选区。每条建议由你确认。启动和解锁后默认暂停。\n截图快捷键会上传该显示器当前可见画面，仅用于一次生成；正文和截图不写入日志。部分应用无法提供可靠的光标或中文输入法状态，将显示暂不支持。",TextWrapping=TextWrapping.Wrap});
+        panel.Children.Add(new TextBlock{Text="停顿 1.5 秒后生成；无选区时读取光标前后各 300 字符，采纳后原位插入。有选区时只根据选中文字续写，采纳键复制结果到剪贴板，保留原文；不附带截图。选区最多 8192 个 UTF-16 单元，超限会提示缩小选区。每条建议由你确认。启动和解锁后默认暂停；暂停时隐藏浮窗。启用后可使用截图快捷键。\n截图快捷键会上传该显示器当前可见画面，仅用于一次生成；正文和截图不写入日志。部分应用无法提供可靠的光标或中文输入法状态，将显示暂不支持。",TextWrapping=TextWrapping.Wrap});
         var export=new Button{Content="导出诊断日志"};export.Click+=(_,_)=>{
             using var dialog=new Forms.SaveFileDialog{Filter="ZIP 文件|*.zip",FileName="AiInput-log-"+DateTime.Now.ToString("yyyyMMdd-HHmmss")+".zip",OverwritePrompt=false};
             if(dialog.ShowDialog()==Forms.DialogResult.OK)

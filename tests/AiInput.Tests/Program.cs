@@ -37,8 +37,15 @@ Check(TextPolicy.Accept(new("词语","stop"),"前","后")=="词语","short phras
 Check(TextPolicy.Accept(new("正文","length"),"","")==null,"truncated completion rejected");
 Check(TextPolicy.Accept(new("已有文字","stop"),"已有文字","")==null,"prefix repetition rejected");
 Check(TextPolicy.Accept(new("下一段","stop"),"","下一段")==null,"suffix repetition rejected");
-Check(TextPolicy.Accept(new(new string('甲',90),"stop"),"","")==null,"no hard cut");
-Check(TextPolicy.Accept(new("第一句。"+new string('甲',70),"stop"),"","")==null,"too short cut rejected");
+string paragraph=string.Concat(Enumerable.Range(1,32).Select(i=>$"这是第{i}句，用来验证超过六十字和二百五十六字后仍然完整保留。"));
+Check(paragraph.Length>256&&TextPolicy.Accept(new(paragraph,"stop"),"前文","")==paragraph,"complete paragraph preserved without cropping");
+Check(TextPolicy.Accept(new(" world ","stop"),"Hello","again.")==" world ","word boundary spaces preserved");
+Check(TextPolicy.Accept(new("national","stop"),"inter","ization")=="national","mid-word continuation preserved");
+Check(TextPolicy.Accept(new("今天完成测试","stop"),"计划是：","，明天发布。")=="今天完成测试","mid-sentence continuation joins existing suffix");
+Check(TextPolicy.Accept(new("已有完整前文内容继续补充。","stop"),"已有完整前文内容","")==null,"partial prefix echo rejected");
+Check(TextPolicy.Accept(new("新增内容后面已有完整内容","stop"),"","后面已有完整内容。")==null,"partial suffix echo rejected");
+Check(TextPolicy.Accept(new("第一段。\n第二段。","stop"),"","")==null,"embedded Enter rejected for chat inputs");
+Check(TextPolicy.Accept(new(new string('甲',TextPolicy.MaxInsertionChars+1),"stop"),"","")==null,"oversize response rejected rather than cropped");
 var original=new ContextSnapshot{Ok=true,Window=1,Process=2,Before=new string('前',300),After="后文"};
 var inserted=original with{Before=new string('前',298)+"新字"};
 Check(TextPolicy.InsertionMatches(original,inserted,"新字"),"bounded insertion verified");
@@ -47,6 +54,18 @@ string sse=": keepalive\n\ndata: {\"choices\":[{\"index\":0,\"delta\":{\"content
 using(var stream=new MemoryStream(Encoding.UTF8.GetBytes(sse)))
     Check((await CompletionClient.ReadSseAsync(stream,default)).Text=="中文","SSE keepalive and completion");
 await Reject(async()=>{using var stream=new MemoryStream(Encoding.UTF8.GetBytes(sse.Replace("data: [DONE]\n\n","")));await CompletionClient.ReadSseAsync(stream,default);},"interrupted SSE rejected");
+await Reject(async()=>{using var stream=new MemoryStream(Encoding.UTF8.GetBytes(sse.Replace("\"stop\"","\"length\"")));await CompletionClient.ReadSseAsync(stream,default);},"token-limited SSE never accepted");
+var streamed=new StringBuilder();
+foreach(char c in paragraph)streamed.Append("data: ").Append(JsonSerializer.Serialize(new{choices=new[]{new{index=0,delta=new{content=c.ToString()}}}})).Append("\n\n");
+streamed.Append("data: {\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n");
+using(var stream=new MemoryStream(Encoding.UTF8.GetBytes(streamed.ToString())))
+    Check((await CompletionClient.ReadSseAsync(stream,default)).Text==paragraph,"full paragraph streamed without cropping");
+using(var memory=new MemoryStream())
+{
+    string maximum=new string('甲',TextPolicy.MaxInsertionChars-2)+"。 ";
+    await Frames.WriteAsync(memory,new RpcRequest("insert","token",maximum),default);memory.Position=0;
+    Check((await Frames.ReadAsync<RpcRequest>(memory,default)).Text==maximum,"maximum paragraph fits IPC intact");
+}
 using(var memory=new MemoryStream())
 {
     await Frames.WriteAsync(memory,new RpcRequest("capture"),default);memory.Position=0;
@@ -60,6 +79,7 @@ using(var content=new OneShotContent(original,image))
     using var doc=JsonDocument.Parse(memory.ToArray());
     var json=doc.RootElement;
     Check(json.GetProperty("model").GetString()=="deepseek-flash","fixed provider model");
+    Check(json.GetProperty("max_tokens").GetInt32()==4096,"paragraph generation budget");
     Check(json.GetProperty("thinking").GetProperty("type").GetString()=="disabled","thinking disabled");
     var uri=json.GetProperty("messages")[1].GetProperty("content")[1].GetProperty("image_url").GetProperty("url").GetString();
     Check(uri=="data:image/png;base64,AQIDBAU=","single inline image serialization");

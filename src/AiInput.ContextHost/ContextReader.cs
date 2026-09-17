@@ -191,7 +191,7 @@ public sealed class ContextReader : IDisposable
     }
     RpcReply Insert(RpcRequest request)
     {
-        if(request.Text.Length==0||request.Text.Length>256||request.Text.Any(char.IsControl)||!Validate(request.Token)||snapshot==null)
+        if(request.Text.Length==0||request.Text.Length>TextPolicy.MaxInsertionChars||request.Text.Any(char.IsControl)||!Validate(request.Token)||snapshot==null)
             return new(false,"InsertRejected");
         // A fresh text read detects providers that missed TextChanged.
         var fresh=Read(false);
@@ -200,7 +200,7 @@ public sealed class ContextReader : IDisposable
             return new(false,"InsertRejected");
         if(!Native.Inject(request.Text,(nint)old.Window)){Clear();return new(false,"InsertUncertain");}
         var timer=Stopwatch.StartNew();
-        while(timer.ElapsedMilliseconds<1000)
+        while(timer.ElapsedMilliseconds<3000)
         {
             Thread.Sleep(40);
             var now=Read(false);

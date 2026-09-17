@@ -67,6 +67,8 @@ public sealed class Controller : IDisposable
             window=new SettingsWindow(this);
             window.Closed+=(_,_)=>window=null;
         }
+        window.AppWindow.IsShownInSwitchers=true;
+        window.AppWindow.Show();
         if(window.AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)presenter.Restore();
         window.Activate();
         Native.SetForegroundWindow(WinRT.Interop.WindowNative.GetWindowHandle(window));
@@ -256,11 +258,14 @@ public sealed class Controller : IDisposable
         // Exercise the actual title-bar close path. Window.Close() explicitly
         // destroys a WinUI window and bypasses cancellable AppWindow.Closing.
         Native.PostMessage(WinRT.Interop.WindowNative.GetWindowHandle(window),0x112,0xF060,0);
-        for(int i=0;i<20&&window!=null&&window.AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter pending&&pending.State!=Microsoft.UI.Windowing.OverlappedPresenterState.Minimized;i++)await Task.Delay(100);
-        if(window==null||window.AppWindow.Presenter is not Microsoft.UI.Windowing.OverlappedPresenter presenter||presenter.State!=Microsoft.UI.Windowing.OverlappedPresenterState.Minimized)
-            throw new InvalidOperationException("TaskbarPersistenceFailed");
+        for(int i=0;i<20&&window!=null&&window.AppWindow.IsVisible;i++)await Task.Delay(100);
+        if(window==null||window.AppWindow.IsVisible||window.AppWindow.IsShownInSwitchers||!overlay.Visible||!tray.Visible||disposed)
+            throw new InvalidOperationException("BackgroundHideFailed");
         OpenSettings();
         await Task.Delay(300);
+        if(!window.AppWindow.IsVisible||!window.AppWindow.IsShownInSwitchers)
+            throw new InvalidOperationException("BackgroundRestoreFailed");
+        overlay.VerifyDisplay();
         if(Program.SmokePath!=null)
         {
             try{File.WriteAllBytes(Program.SmokePath+".png",ScreenCapture.Capture(WinRT.Interop.WindowNative.GetWindowHandle(window)));}
@@ -279,6 +284,7 @@ public sealed class Controller : IDisposable
         "ApiKeyInvalid"=>"API Key 无效，请在设置中重新填写",
         "BalanceInsufficient"=>"DeepSeek 账户余额不足",
         "RateLimited"=>"请求受到限流，稍后可重试",
+        "IncompleteResponse"=>"续写未完整结束，本次未插入，请重新触发",
         "InsertRejected"=>"输入位置已经变化，本条建议已取消",
         "InsertUncertain"=>"插入结果未确认，已暂停，未自动重试",
         _=>"当前操作未完成："+(code.StartsWith("Http")?"服务暂不可用":"输入目标暂不可用")

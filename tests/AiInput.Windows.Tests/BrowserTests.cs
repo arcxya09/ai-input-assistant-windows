@@ -60,9 +60,13 @@ internal static class BrowserTests
                 var context=capture.Snapshot;
                 if(!capture.Ok||context==null||context.Before!="前文"||context.After.TrimEnd('\r','\n')!="后文")
                     throw new Exception("Browser "+name+" synthetic context: "+capture.Code+" "+System.Text.Json.JsonSerializer.Serialize(context));
-                var insertion=await broker.CallAsync(new("insert",context.Token,"新增"),default);
+                string paragraph=string.Concat(Enumerable.Range(1,14).Select(i=>$"第{i}句完整内容用于验证网页光标插入和段落不会截断。"));
+                var insertion=await broker.CallAsync(new("insert",context.Token,paragraph),default);
                 if(!insertion.Ok)throw new Exception("Browser "+name+" insertion: "+insertion.Code);
-                Console.WriteLine("PASS browser "+name+" context and verified insertion");
+                string full=field.GetCurrentPattern(10002) is IUIAutomationValuePattern value?value.CurrentValue:
+                    ((IUIAutomationTextPattern)field.GetCurrentPattern(10014)).DocumentRange.GetText(-1);
+                if(!full.Contains("前文"+paragraph+"后文",StringComparison.Ordinal))throw new Exception("Browser full paragraph changed: "+name);
+                Console.WriteLine("PASS browser "+name+" full paragraph at caret and surrounding text preserved");
             }
         }
         finally{if(!process.HasExited)process.Kill(true);}

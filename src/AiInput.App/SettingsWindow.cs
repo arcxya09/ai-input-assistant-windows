@@ -26,13 +26,13 @@ public sealed class SettingsWindow : Window
             if(!controller.IsQuitting)
             {
                 args.Cancel=true;
-                DispatcherQueue.TryEnqueue(()=>{if(AppWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)presenter.Minimize();});
+                DispatcherQueue.TryEnqueue(()=>{if(!controller.IsQuitting){AppWindow.IsShownInSwitchers=false;AppWindow.Hide();}});
             }
         };
         AppWindow.Resize(new global::Windows.Graphics.SizeInt32(700,780));
         var panel=new StackPanel{Spacing=18,Margin=new Thickness(32),MaxWidth=640,HorizontalAlignment=HorizontalAlignment.Stretch};
         panel.Children.Add(new TextBlock{Text="AI 输入助手",FontSize=30,FontWeight=Microsoft.UI.Text.FontWeights.SemiBold});
-        panel.Children.Add(new TextBlock{Text="在你停顿时，接着写一句。",FontSize=16,Foreground=new SolidColorBrush(Microsoft.UI.Colors.Gray)});
+        panel.Children.Add(new TextBlock{Text="从光标接着写，让一段话完整收尾。",FontSize=16,Foreground=new SolidColorBrush(Microsoft.UI.Colors.Gray)});
         panel.Children.Add(status);
         var toggle=new Button{Content="启用／暂停"};toggle.Click+=(_,_)=>controller.Toggle();panel.Children.Add(toggle);
         panel.Children.Add(new TextBlock{Text="DeepSeek API Key",FontSize=18});
@@ -88,7 +88,7 @@ public sealed class SettingsWindow : Window
         updateButtons.Children.Add(checkUpdate);updateButtons.Children.Add(installUpdate);updateButtons.Children.Add(cancelUpdate);panel.Children.Add(updateButtons);
         panel.Children.Add(new HyperlinkButton{Content="在 GitHub 查看版本与下载",NavigateUri=new Uri(ProductInfo.ReleasesUrl)});
         panel.Children.Add(new TextBlock{Text="下载完成后点击“重启并安装”，程序会保存设置、退出并完成安装，然后重新启动。"+(controller.Updates.Portable?" 当前为便携版；更新后会在当前目录生成卸载程序。":""),TextWrapping=TextWrapping.Wrap});
-        panel.Children.Add(new TextBlock{Text="关闭此窗口会最小化到任务栏。双击状态胶囊可打开设置；完全退出请使用托盘或胶囊右键菜单。",TextWrapping=TextWrapping.Wrap});
+        panel.Children.Add(new TextBlock{Text="关闭此窗口会隐藏到后台，不占用任务栏或 Alt+Tab 列表。双击托盘图标或状态胶囊可打开设置；完全退出请使用右键菜单。",TextWrapping=TextWrapping.Wrap});
         Content=new ScrollViewer{Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
         controller.Changed+=Update;controller.Updates.Changed+=UpdateDownload;
         Closed+=(_,_)=>{controller.Changed-=Update;controller.Updates.Changed-=UpdateDownload;};Update();UpdateDownload();

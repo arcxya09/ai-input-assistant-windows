@@ -60,6 +60,16 @@ static class Program
                 var read=await broker.CallAsync(new("capture"),default);
                 if(read.Snapshot is not {Before:"前文新增",After:"后文"})throw new Exception("Insertion corrupted surrounding text");
                 Console.WriteLine("PASS surrounding text preserved");
+                string paragraph=string.Concat(Enumerable.Range(1,20).Select(i=>$"第{i}句完整内容用于检查插入没有截断，前后文保持原样。"));
+                var longInsert=await broker.CallAsync(new("insert",read.Snapshot.Token,paragraph),default);
+                if(!longInsert.Ok)throw new Exception("Paragraph insertion "+longInsert.Code);
+                uint thread=Native.GetWindowThreadProcessId(target.MainWindowHandle,out _);
+                var info=new Native.GUITHREADINFO{Size=(uint)Marshal.SizeOf<Native.GUITHREADINFO>()};
+                if(!Native.GetGUIThreadInfo(thread,ref info))throw new Exception("Missing native focus");
+                var actual=new System.Text.StringBuilder(4096);
+                if(Native.SendTextMessageTimeout(info.Focus,0x000D,4096,actual,2,1000,out _)==0||actual.ToString()!="前文新增"+paragraph+"后文")
+                    throw new Exception("Full paragraph or caret boundaries changed");
+                Console.WriteLine("PASS full paragraph >256 characters inserted at caret and independently read in full");
             }
             finally{target.Kill(true);}
         }

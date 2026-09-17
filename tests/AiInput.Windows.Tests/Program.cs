@@ -136,7 +136,12 @@ static class Program
         }
         try{await BrowserTests.Run(broker);}catch(Exception e){Console.WriteLine("FAIL "+e.Message);failures++;}
         try{await ObsidianTests.Run(broker);}catch(Exception e){Console.WriteLine("FAIL "+e.Message);failures++;}
-        if(failures>0)throw new Exception(failures+" compatibility test group(s) failed");
+        if(failures>0)
+        {
+            string log=Path.Combine(LocalStore.Root,"logs","events.log");
+            if(File.Exists(log))foreach(string line in File.ReadLines(log).TakeLast(25))Console.WriteLine("DIAGNOSTIC "+line);
+            throw new Exception(failures+" compatibility test group(s) failed");
+        }
         return 0;
     }
 }

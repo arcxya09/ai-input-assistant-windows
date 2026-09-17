@@ -110,9 +110,19 @@ public sealed class ContextReader : IDisposable
                 throw new InvalidOperationException("Composing");
         }
         if(NativeEditReader.IsComposing(NativeEditReader.FocusWindow(thread)))throw new InvalidOperationException("Composing");
+        if(hasSelection)
+        {
+            // CodeMirror can focus a single paragraph while the user's explicit
+            // selection spans sibling paragraphs. Require overlap with focus,
+            // then bound that selection to the owning TextPattern document.
+            if(caret.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_End,bounds,TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start)<0||
+                caret.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,bounds,TextPatternRangeEndpoint.TextPatternRangeEndpoint_End)>0)
+            {LocalStore.Log("UiaSelectionOutsideFocus");throw new InvalidOperationException("TargetChanged");}
+            bounds=pattern.DocumentRange;
+        }
         if(caret.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,bounds,TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start)<0||
             caret.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_End,bounds,TextPatternRangeEndpoint.TextPatternRangeEndpoint_End)>0)
-            throw new InvalidOperationException("TargetChanged");
+        {LocalStore.Log("UiaRangeOutsideBounds");throw new InvalidOperationException("TargetChanged");}
         return(focused,caret,bounds,hwnd,(int)pid);
     }
     static bool Collapsed(IUIAutomationTextRange range)=>range.CompareEndpoints(TextPatternRangeEndpoint.TextPatternRangeEndpoint_Start,range,TextPatternRangeEndpoint.TextPatternRangeEndpoint_End)==0;
@@ -177,7 +187,7 @@ public sealed class ContextReader : IDisposable
         if(hwnd==0||pid==parent||pid==Environment.ProcessId)throw new InvalidOperationException("NoTarget");
         var state=AccessibleTextReader.Read(hwnd,thread)??throw new InvalidOperationException("TextPatternUnavailable");
         var verify=AccessibleTextReader.Read(hwnd,thread);
-        if(verify==null||!state.Matches(verify))throw new InvalidOperationException("TargetChanged");
+        if(verify==null||!state.Matches(verify)){if(attach)LocalStore.Log("AccessibleChangedDuringRead");throw new InvalidOperationException("TargetChanged");}
         if(attach)
         {
             accessibleState=state;
@@ -222,7 +232,7 @@ public sealed class ContextReader : IDisposable
             var end=Locate();
             if(version!=Interlocked.Read(ref handler.Version)||automation.CompareElements(current.Element,end.Element)==0||
                 !SameRange(current.Caret,end.Caret))
-                throw new InvalidOperationException("TargetChanged");
+            {if(attach)LocalStore.Log(version!=Interlocked.Read(ref handler.Version)?"UiaEventDuringRead":"UiaRangeChangedDuringRead");throw new InvalidOperationException("TargetChanged");}
             if(attach){processStart=start;eventVersion=version;LocalStore.Log("UiaTextReady");}
             return new(){Ok=true,Code="Ready",Token=Guid.NewGuid().ToString("N"),Window=(long)current.Window,
                 Process=current.Process,Revision=version,Before=left,After=right,SelectedText=selected};
